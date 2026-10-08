@@ -1,0 +1,146 @@
+import { useEffect } from 'react';
+import { STATUSES, formatDate, formatSize, fromDateInput, toDateInput } from '../util';
+import Cover from './Cover';
+import Stars from './Stars';
+
+export default function BookDetails({ book, onUpdate, onOpen, onDelete, onClose }) {
+  const update = (patch) => onUpdate(book.id, patch);
+  // Text fields save shortly after you stop typing.
+  const updateText = (patch) => onUpdate(book.id, patch, { delay: 700 });
+
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  function setStatus(status) {
+    const now = Date.now();
+    const patch = { status };
+    if (status === 'reading' && !book.startedAt) patch.startedAt = now;
+    if (status === 'finished') {
+      patch.finishedAt = book.finishedAt || now;
+      patch.startedAt = book.startedAt || now;
+    }
+    update(patch);
+  }
+
+  const pct = Math.round(book.progress * 100);
+  const action = book.progress > 0 && book.progress < 1 ? `Continue reading (${pct}%)` : 'Read';
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={book.title}>
+        <button className="icon-btn modal-close" onClick={onClose} aria-label="Close">
+          ×
+        </button>
+        <div className="details">
+          <div className="details-side">
+            <Cover book={book} className="cover-lg" />
+            <button className="btn primary block" onClick={() => onOpen(book)}>
+              {action}
+            </button>
+            <p className="muted small">
+              {book.format.toUpperCase()} · {formatSize(book.size)}
+              {book.pageCount ? ` · ${book.pageCount} pages` : ''}
+              <br />
+              Added {formatDate(book.addedAt)}
+              {book.lastOpenedAt && (
+                <>
+                  <br />
+                  Last opened {formatDate(book.lastOpenedAt)}
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="details-main">
+            <input
+              className="title-input"
+              value={book.title}
+              onChange={(e) => updateText({ title: e.target.value })}
+              aria-label="Title"
+            />
+            <input
+              className="author-input"
+              value={book.author}
+              placeholder="Add author"
+              onChange={(e) => updateText({ author: e.target.value })}
+              aria-label="Author"
+            />
+
+            <div className="field">
+              <span className="field-label">Status</span>
+              <div className="segmented">
+                {STATUSES.map((s) => (
+                  <button
+                    key={s.id}
+                    className={book.status === s.id ? 'active' : ''}
+                    onClick={() => setStatus(s.id)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <span className="field-label">Rating</span>
+              <Stars value={book.rating} onChange={(rating) => update({ rating })} size="lg" />
+            </div>
+
+            {book.progress > 0 && (
+              <div className="field">
+                <span className="field-label">Progress</span>
+                <div className="progress-line">
+                  <div className="progress">
+                    <div style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="muted small">{pct}%</span>
+                </div>
+              </div>
+            )}
+
+            <div className="field-row">
+              <label className="field">
+                <span className="field-label">Started</span>
+                <input
+                  type="date"
+                  value={toDateInput(book.startedAt)}
+                  onChange={(e) => update({ startedAt: fromDateInput(e.target.value) })}
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Finished</span>
+                <input
+                  type="date"
+                  value={toDateInput(book.finishedAt)}
+                  onChange={(e) => update({ finishedAt: fromDateInput(e.target.value) })}
+                />
+              </label>
+            </div>
+
+            <label className="field">
+              <span className="field-label">Notes &amp; review</span>
+              <textarea
+                rows={5}
+                value={book.review}
+                placeholder="What did you think?"
+                onChange={(e) => updateText({ review: e.target.value })}
+              />
+            </label>
+
+            <div className="details-footer">
+              <button
+                className="btn danger-ghost"
+                onClick={() => confirm(`Remove "${book.title}" from your library?`) && onDelete(book.id)}
+              >
+                Remove from library
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
