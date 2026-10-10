@@ -5,54 +5,39 @@ import Library from './components/Library';
 import BookDetails from './components/BookDetails';
 import Reader from './components/Reader';
 import SettingsDialog from './components/SettingsDialog';
-import Setup from './components/Setup';
 import Welcome from './components/Welcome';
 
-// A link from another device (Settings → Other devices) carries the library location.
-function takeLibraryFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const raw = params.get('library');
-  if (!raw) return;
-  try {
-    const loc = JSON.parse(raw);
-    if (loc?.driveId && loc?.folderId) library.useLocation(loc);
-  } catch {
-    /* ignore a mangled link */
-  }
-  params.delete('library');
-  const rest = params.toString();
-  window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
-}
-takeLibraryFromUrl();
-
 export default function App() {
-  const [auth, setAuth] = useState(isConfigured ? { status: 'loading' } : { status: 'signed-out' });
-  const [location, setLocation] = useState(() => {
-    const loc = library.savedLocation();
-    library.useLocation(loc);
-    return loc;
-  });
+  const [state, setState] = useState(isConfigured ? { status: 'loading' } : { status: 'signed-out' });
 
   useEffect(() => {
     if (!isConfigured) return;
-    initAuth().then(
-      (account) => setAuth(account ? { status: 'ready', account } : { status: 'signed-out' }),
-      (err) => setAuth({ status: 'signed-out', error: err.message }),
-    );
+    (async () => {
+      let account;
+      try {
+        account = await initAuth();
+      } catch (err) {
+        return setState({ status: 'signed-out', error: err.message });
+      }
+      if (!account) return setState({ status: 'signed-out' });
+      setState({ status: 'connecting', account });
+      try {
+        const folder = await library.connect();
+        setState({ status: 'ready', account, folder });
+      } catch (err) {
+        setState({ status: 'error', account, error: `Couldn't open your OneDrive: ${err.message}` });
+      }
+    })();
   }, []);
 
-  const chooseLocation = useCallback((loc) => {
-    library.useLocation(loc);
-    setLocation(loc);
-  }, []);
-
-  if (auth.status === 'loading') return <div className="loading">Signing in…</div>;
-  if (auth.status === 'signed-out') return <Welcome error={auth.error} />;
-  if (!location) return <Setup account={auth.account} onDone={chooseLocation} onSignOut={signOut} />;
-  return <Bookshelf key={location.folderId} account={auth.account} location={location} onChangeLibrary={() => chooseLocation(null)} />;
+  if (state.status === 'loading') return <div className="loading">Signing in…</div>;
+  if (state.status === 'signed-out') return <Welcome error={state.error} />;
+  if (state.status === 'connecting') return <Welcome busy="Opening your Bookshelf folder in OneDrive…" />;
+  if (state.status === 'error') return <Welcome error={state.error} canSignOut />;
+  return <Bookshelf account={state.account} folder={state.folder} />;
 }
 
-function Bookshelf({ account, location, onChangeLibrary }) {
+function Bookshelf({ account, folder }) {
   const [books, setBooks] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
@@ -67,7 +52,7 @@ function Bookshelf({ account, location, onChangeLibrary }) {
       setBooks(await library.listBooks());
       setLoadError('');
     } catch (err) {
-      setLoadError(err.status === 404 ? "This library can't be found anymore. Choose it again in Settings." : err.message);
+      setLoadError(err.message);
       setBooks((b) => b ?? []);
     }
   }, []);
@@ -179,10 +164,9 @@ function Bookshelf({ account, location, onChangeLibrary }) {
       {showSettings && (
         <SettingsDialog
           account={account}
-          location={location}
+          folder={folder}
           books={books}
           onSignOut={signOut}
-          onChangeLibrary={onChangeLibrary}
           onClose={() => setShowSettings(false)}
         />
       )}

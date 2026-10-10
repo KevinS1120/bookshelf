@@ -24,10 +24,9 @@ function exportCsv(books) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function SettingsDialog({ account, location, books, onSignOut, onChangeLibrary, onClose }) {
+export default function SettingsDialog({ account, folder, books, onSignOut, onClose }) {
   const [qr, setQr] = useState(null);
-  // Opening this link on another device connects it to the same library.
-  const deviceUrl = `${APP_URL}?library=${encodeURIComponent(JSON.stringify(location))}`;
+  const deviceUrl = APP_URL;
 
   useEffect(() => {
     QRCode.toDataURL(deviceUrl, { margin: 1, width: 240 }).then(setQr, () => {});
@@ -53,7 +52,7 @@ export default function SettingsDialog({ account, location, books, onSignOut, on
             {qr && <img className="qr" src={qr} alt="QR code to open Bookshelf on another device" />}
             <div>
               <p className="muted">
-                Scan with your phone or tablet camera, then sign in with the same account. It opens this same library.
+                Scan with your phone or tablet camera, then sign in with the same Microsoft account.
               </p>
               <ul className="tips">
                 <li>
@@ -73,17 +72,15 @@ export default function SettingsDialog({ account, location, books, onSignOut, on
         <section>
           <h3>Library</h3>
           <p>
-            <strong>{location.name}</strong>{' '}
-            <a href={location.webUrl} target="_blank" rel="noreferrer">
-              Open in SharePoint ↗
+            Books are in the <strong>Bookshelf</strong> folder of your OneDrive. You can also add PDFs and EPUBs by
+            putting them in that folder.{' '}
+            <a href={folder.webUrl} target="_blank" rel="noreferrer">
+              Open in OneDrive ↗
             </a>
           </p>
           <div className="row-gap">
             <button className="btn" onClick={() => exportCsv(books)}>
               Download reading log (CSV)
-            </button>
-            <button className="btn" onClick={onChangeLibrary}>
-              Use a different library
             </button>
           </div>
         </section>

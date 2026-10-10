@@ -1,57 +1,36 @@
 # Bookshelf
 
 A personal reading app for PDF and EPUB books that works on any device. Your library lives in a
-SharePoint document library (your OneDrive counts): each book is a file, and your status, rating,
-dates, progress, and notes are columns beside it. Bookmarks and your exact reading position sync
-too, so you can stop on your phone and carry on from the same spot on your iPad.
+**Bookshelf** folder in your personal OneDrive: each book is a file there, and your status, rating,
+dates, progress, notes and bookmarks sync between devices. You can stop on your phone and carry on
+from the same spot on your iPad.
 
-The app is a static website (hosted free on GitHub Pages) that signs in with Microsoft and talks to
-SharePoint through Microsoft Graph. No server or PC needs to be running.
+The app is a static website hosted free on GitHub Pages: <https://kevins1120.github.io/bookshelf/>.
+It signs in with your Microsoft account and talks to OneDrive through Microsoft Graph. No server
+or PC needs to be running.
 
-## One-time setup
+## Using it
 
-### 1. Register the app in Microsoft Entra
+Open <https://kevins1120.github.io/bookshelf/> and sign in with your personal Microsoft account. The
+first time, it creates the Bookshelf folder in your OneDrive.
 
-1. Go to <https://entra.microsoft.com> and sign in with your Georgia Tech account.
-2. **Applications → App registrations → New registration**
-   - Name: `Bookshelf`
-   - Supported account types: **Accounts in this organizational directory only**
-   - Redirect URI: platform **Single-page application (SPA)**, URL `https://kevins1120.github.io/bookshelf/`
-3. Click **Register**. On the overview page, copy the **Application (client) ID**.
-4. **Authentication → Add URI** under Single-page application, and add `http://localhost:5173/`
-   (for running it on your PC while developing). Save.
-5. **API permissions → Add a permission → Microsoft Graph → Delegated permissions**, and add
-   `Sites.ReadWrite.All` and `Sites.Manage.All` (`User.Read` is already there).
-   - If you see **Grant admin consent**, click it. If you can't, you'll be asked to approve when you
-     first sign in, or GT may ask an administrator to approve it.
+On a phone or tablet, open the same address (or scan the QR code under **⚙ Settings**) and sign
+in with the same account. On iPhone/iPad, use Safari's Share → **Add to Home Screen** for an app icon.
 
-If step 2 says you don't have permission to register apps, Georgia Tech has turned that off and
-you'll need to ask GT's IT to register it for you.
+You can add books in the app, or just put PDF/EPUB files in the OneDrive Bookshelf folder from
+anywhere and they'll show up.
 
-### 2. Put the client ID in the app
+## App registration (already done)
 
-Paste it into `src/config.js` as `MS_CLIENT_ID`. It identifies the app and isn't a secret.
+The app is registered in Microsoft Entra as "Bookshelf" (client ID in `src/config.js`):
 
-### 3. Publish
+- Supported account types: any Entra ID tenant + personal Microsoft accounts (the app signs in
+  with personal accounts only)
+- Single-page application redirect URIs: `https://kevins1120.github.io/bookshelf/` and
+  `http://localhost:5173/`
+- Permissions requested at sign-in: `User.Read`, `Files.ReadWrite`
 
-Push the project to the `bookshelf` repository on GitHub. In the repository, go to **Settings →
-Pages → Build and deployment**, set **Source** to **GitHub Actions**, and every push to `main`
-deploys automatically to <https://kevins1120.github.io/bookshelf/>.
-
-### 4. First run
-
-Open the site, sign in, and choose where books live:
-
-- **My OneDrive**: creates a `Bookshelf` folder in your OneDrive. Simplest.
-- **A SharePoint site library**: paste a link to any folder or document library you can edit.
-
-The app adds its columns (Author, Status, Rating, Progress %, Started, Finished, …) to that library.
-
-### Other devices
-
-In the app, open **⚙ Settings** and scan the QR code with your phone or tablet. Sign in with the same
-account and it opens the same library. On iPhone/iPad, use Safari's Share → **Add to Home Screen**
-for an app icon.
+Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`.
 
 ## Features
 
@@ -66,12 +45,10 @@ for an app icon.
 
 ## Your data
 
-Everything is in the SharePoint library you chose. Books are ordinary files you can download or
-open there. Reading data is in the library's columns, and covers and EPUB page maps are in a
-`_bookshelf` folder. Deleting a book in the app moves it to the SharePoint recycle bin.
-
-Georgia Tech accounts are closed some time after you leave GT. Download your books and the CSV
-reading log before then.
+Everything is in your OneDrive's Bookshelf folder. Books are ordinary files. Reading data for all
+books is in `_bookshelf/library.json`, and covers and EPUB page maps are in `_bookshelf` too.
+Saves check that the file hasn't changed on another device in the meantime, and merge if it has.
+Deleting a book in the app moves it to the OneDrive recycle bin.
 
 ## Development
 
@@ -84,7 +61,7 @@ Then open <http://localhost:5173>.
 
 - `src/auth.js`: Microsoft sign-in (MSAL)
 - `src/graph.js`: Microsoft Graph requests
-- `src/library.js`: the SharePoint library: listing, uploads, columns, batched saves
+- `src/library.js`: the OneDrive library: listing, uploads, reading data, batched saves
 - `src/cache.js`: per-device cache of book files and covers
 - `src/settings.js`: reader display settings
 - `src/components/`: screens and the PDF/EPUB readers
