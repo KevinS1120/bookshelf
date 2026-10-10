@@ -89,3 +89,13 @@ export async function importFile(file) {
     cover: meta.cover ?? null,
   };
 }
+
+// The book's own cover (first page of a PDF, or the EPUB's cover image).
+export async function extractCover(blob, format) {
+  try {
+    const meta = format === 'pdf' ? await readPdf(blob) : await readEpub(blob);
+    return meta.cover ?? null;
+  } catch {
+    return null;
+  }
+}

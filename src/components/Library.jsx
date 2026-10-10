@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createBook } from '../library';
 import { importFile } from '../importBook';
 import { countLocalBooks, migrateLocalBooks } from '../migrate';
-import { STATUSES, usePref } from '../util';
+import { STATUSES, dayKey, formatDuration, readingStreak, usePref } from '../util';
+import BookMenu from './BookMenu';
 import Cover from './Cover';
 import Stars from './Stars';
 
@@ -12,10 +13,12 @@ const SORTS = {
   title: { label: 'Title', fn: (a, b) => a.title.localeCompare(b.title) },
   author: { label: 'Author', fn: (a, b) => (a.author || '~').localeCompare(b.author || '~') },
   rating: { label: 'Rating', fn: (a, b) => b.rating - a.rating },
+  progress: { label: 'Progress', fn: (a, b) => b.progress - a.progress },
 };
 
-export default function Library({ books, onAdd, onSelect, onOpen, onRefresh, onSettings, error }) {
+export default function Library({ books, extras, allTags, actions, onAdd, onRefresh, onSettings, onSetGoal, error }) {
   const [filter, setFilter] = usePref('lib-filter', 'all');
+  const [tag, setTag] = usePref('lib-tag', null);
   const [sort, setSort] = usePref('lib-sort', 'recent');
   const [query, setQuery] = useState('');
   const [importing, setImporting] = useState(null);
@@ -27,6 +30,9 @@ export default function Library({ books, onAdd, onSelect, onOpen, onRefresh, onS
   useEffect(() => {
     countLocalBooks().then(setLocalCount);
   }, []);
+
+  // A collection that no longer has any books.
+  const activeTag = tag && allTags.includes(tag) ? tag : null;
 
   async function migrate() {
     setNotice(null);
@@ -54,6 +60,8 @@ export default function Library({ books, onAdd, onSelect, onOpen, onRefresh, onS
       }
       try {
         const { meta, cover } = await importFile(f);
+        // New books join the collection you're looking at.
+        if (activeTag) meta.tags = [activeTag];
         const book = await createBook(meta, f, cover, (pct) =>
           setImporting({ done: i, total: files.length, name: f.name, pct }),
         );
@@ -68,36 +76,28 @@ export default function Library({ books, onAdd, onSelect, onOpen, onRefresh, onS
     setNotice({ added, errors });
   }
 
-  const counts = useMemo(() => {
-    const c = { all: books.length };
-    for (const s of STATUSES) c[s.id] = books.filter((b) => b.status === s.id).length;
-    return c;
-  }, [books]);
+  const inTag = useMemo(() => (activeTag ? books.filter((b) => b.tags.includes(activeTag)) : books), [books, activeTag]);
 
-  const stats = useMemo(() => {
-    const year = new Date().getFullYear();
-    const rated = books.filter((b) => b.rating > 0);
-    return {
-      year,
-      finishedThisYear: books.filter((b) => b.status === 'finished' && new Date(b.finishedAt).getFullYear() === year).length,
-      avgRating: rated.length ? (rated.reduce((s, b) => s + b.rating, 0) / rated.length).toFixed(1) : null,
-    };
-  }, [books]);
+  const counts = useMemo(() => {
+    const c = { all: inTag.length };
+    for (const s of STATUSES) c[s.id] = inTag.filter((b) => b.status === s.id).length;
+    return c;
+  }, [inTag]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return books
+    return inTag
       .filter((b) => filter === 'all' || b.status === filter)
-      .filter((b) => !q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q))
+      .filter((b) => !q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q) || b.tags.some((t) => t.toLowerCase().includes(q)))
       .sort(SORTS[sort]?.fn ?? SORTS.recent.fn);
-  }, [books, filter, sort, query]);
+  }, [inTag, filter, sort, query]);
 
   const continueReading = useMemo(
     () =>
       books
         .filter((b) => b.status === 'reading')
         .sort((a, b) => (b.lastOpenedAt || 0) - (a.lastOpenedAt || 0))
-        .slice(0, 3),
+        .slice(0, 4),
     [books],
   );
 
@@ -117,6 +117,16 @@ export default function Library({ books, onAdd, onSelect, onOpen, onRefresh, onS
     },
   };
 
+  const menuProps = (b) => ({
+    book: b,
+    onOpen: () => actions.open(b),
+    onDetails: () => actions.details(b),
+    onStatus: (s) => actions.status(b, s),
+    onStartOver: () => actions.startOver(b),
+    onCover: () => actions.cover(b),
+    onDelete: () => actions.remove(b),
+  });
+
   return (
     <div className="library" {...dropHandlers}>
       <header className="lib-header">
@@ -127,7 +137,7 @@ export default function Library({ books, onAdd, onSelect, onOpen, onRefresh, onS
         <input
           className="search"
           type="search"
-          placeholder="Search title or author"
+          placeholder="Search title, author, or collection"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -196,32 +206,44 @@ export default function Library({ books, onAdd, onSelect, onOpen, onRefresh, onS
         </button>
       ) : (
         <main className="lib-main">
-          <section className="stats">
-            <Stat value={books.length} label={books.length === 1 ? 'book' : 'books'} />
-            <Stat value={counts.reading} label="reading now" />
-            <Stat value={stats.finishedThisYear} label={`finished in ${stats.year}`} />
-            <Stat value={stats.avgRating ? `${stats.avgRating}★` : '—'} label="average rating" />
-          </section>
+          <Stats books={books} extras={extras} onSetGoal={onSetGoal} />
 
-          {filter === 'all' && !query && continueReading.length > 0 && (
+          {filter === 'all' && !query && !activeTag && continueReading.length > 0 && (
             <section>
               <h2 className="section-title">Continue reading</h2>
               <div className="continue-row">
                 {continueReading.map((b) => (
-                  <button key={b.id} className="continue-card" onClick={() => onOpen(b)}>
-                    <Cover book={b} className="cover-sm" />
-                    <div className="continue-info">
-                      <strong className="clamp-2">{b.title}</strong>
-                      {b.author && <span className="muted">{b.author}</span>}
-                      <div className="progress">
-                        <div style={{ width: `${Math.round(b.progress * 100)}%` }} />
+                  <div key={b.id} className="continue-card">
+                    <button className="continue-main" onClick={() => actions.open(b)}>
+                      <Cover book={b} className="cover-sm" />
+                      <div className="continue-info">
+                        <strong className="clamp-2">{b.title}</strong>
+                        {b.author && <span className="muted clamp-1">{b.author}</span>}
+                        <div className="progress">
+                          <div style={{ width: `${Math.round(b.progress * 100)}%` }} />
+                        </div>
+                        <span className="muted small">{Math.round(b.progress * 100)}% · Resume ›</span>
                       </div>
-                      <span className="muted small">{Math.round(b.progress * 100)}% · Resume ›</span>
-                    </div>
-                  </button>
+                    </button>
+                    <BookMenu {...menuProps(b)} className="menu-btn-inline" />
+                  </div>
                 ))}
               </div>
             </section>
+          )}
+
+          {allTags.length > 0 && (
+            <div className="collections" role="tablist" aria-label="Collections">
+              <span className="collections-label">Collections</span>
+              <button className={!activeTag ? 'active' : ''} onClick={() => setTag(null)}>
+                All books
+              </button>
+              {allTags.map((t) => (
+                <button key={t} className={activeTag === t ? 'active' : ''} onClick={() => setTag(activeTag === t ? null : t)}>
+                  {t}
+                </button>
+              ))}
+            </div>
           )}
 
           <div className="toolbar">
@@ -255,27 +277,30 @@ export default function Library({ books, onAdd, onSelect, onOpen, onRefresh, onS
           ) : (
             <div className="grid">
               {visible.map((b) => (
-                <button key={b.id} className="book-card" onClick={() => onSelect(b)}>
-                  <div className="cover-wrap">
-                    <Cover book={b} />
-                    <span className="badge">{b.format.toUpperCase()}</span>
-                    {b.status === 'finished' && <span className="badge done">✓</span>}
-                    {b.status === 'reading' && (
-                      <div className="progress overlay">
-                        <div style={{ width: `${Math.round(b.progress * 100)}%` }} />
-                      </div>
-                    )}
-                  </div>
+                <div key={b.id} className="book-card">
+                  <button className="book-open" onClick={() => actions.details(b)} aria-label={b.title}>
+                    <div className="cover-wrap">
+                      <Cover book={b} />
+                      <span className="badge">{b.format.toUpperCase()}</span>
+                      {b.status === 'finished' && <span className="badge done">✓</span>}
+                      {b.status === 'paused' && <span className="badge paused">❚❚</span>}
+                      {(b.status === 'reading' || b.status === 'paused') && b.progress > 0 && (
+                        <div className="progress overlay">
+                          <div style={{ width: `${Math.round(b.progress * 100)}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                  <BookMenu {...menuProps(b)} className="menu-btn-cover" />
                   <strong className="clamp-2">{b.title}</strong>
                   {b.author && <span className="muted clamp-1">{b.author}</span>}
                   {b.rating > 0 && <Stars value={b.rating} size="sm" />}
-                </button>
+                </div>
               ))}
             </div>
           )}
         </main>
       )}
-
 
       {dragging && (
         <div className="drop-overlay">
@@ -286,11 +311,113 @@ export default function Library({ books, onAdd, onSelect, onOpen, onRefresh, onS
   );
 }
 
-function Stat({ value, label }) {
+function Stats({ books, extras, onSetGoal }) {
+  const year = new Date().getFullYear();
+  const finished = books.filter((b) => b.status === 'finished' && new Date(b.finishedAt).getFullYear() === year).length;
+  const goal = extras.settings.goals?.[year] ?? 0;
+  const activity = extras.activity ?? {};
+  const streak = readingStreak(activity);
+
+  // Last 14 days, oldest first.
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (13 - i));
+    return { key: dayKey(d), secs: activity[dayKey(d)] || 0, label: d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) };
+  });
+  const week = days.slice(7).reduce((s, d) => s + d.secs, 0);
+  const max = Math.max(...days.map((d) => d.secs), 1);
+
   return (
-    <div className="stat">
-      <span className="stat-value">{value}</span>
-      <span className="stat-label">{label}</span>
-    </div>
+    <section className="stats">
+      <GoalStat year={year} finished={finished} goal={goal} onSetGoal={onSetGoal} />
+      <div className="stat">
+        <span className="stat-value">{books.filter((b) => b.status === 'reading').length}</span>
+        <span className="stat-label">reading now</span>
+      </div>
+      <div className="stat">
+        <span className="stat-value">
+          {streak}
+          {streak > 0 && <span className="flame"> 🔥</span>}
+        </span>
+        <span className="stat-label">day streak</span>
+      </div>
+      <div className="stat activity">
+        <span className="stat-value">{week ? formatDuration(week) : '—'}</span>
+        <span className="stat-label">read this week</span>
+        <div className="bars" aria-hidden="true">
+          {days.map((d) => (
+            <span
+              key={d.key}
+              title={`${d.label}: ${d.secs ? formatDuration(d.secs) : 'no reading'}`}
+              style={{ height: `${Math.max(d.secs ? 12 : 4, (d.secs / max) * 100)}%` }}
+              className={d.secs ? 'on' : ''}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GoalStat({ year, finished, goal, onSetGoal }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+
+  if (editing) {
+    return (
+      <form
+        className="stat goal-edit"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSetGoal(year, Math.max(0, parseInt(value, 10) || 0));
+          setEditing(false);
+        }}
+      >
+        <span className="stat-label">Books to read in {year}</span>
+        <div className="row-gap nowrap">
+          <input
+            className="text-input"
+            type="number"
+            min="0"
+            max="999"
+            inputMode="numeric"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoFocus
+          />
+          <button className="btn primary" type="submit">
+            Save
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  const edit = () => {
+    setValue(goal ? String(goal) : '12');
+    setEditing(true);
+  };
+
+  if (!goal) {
+    return (
+      <button className="stat stat-button" onClick={edit}>
+        <span className="stat-value">{finished}</span>
+        <span className="stat-label">finished in {year}</span>
+        <span className="stat-link">Set a reading goal ›</span>
+      </button>
+    );
+  }
+  const pct = Math.min(100, Math.round((finished / goal) * 100));
+  return (
+    <button className="stat stat-button" onClick={edit} title="Change your goal">
+      <span className="stat-value">
+        {finished}
+        <span className="stat-of"> / {goal}</span>
+      </span>
+      <span className="stat-label">{finished >= goal ? `${year} goal reached! 🎉` : `books toward your ${year} goal`}</span>
+      <div className="progress goal-bar">
+        <div style={{ width: `${pct}%` }} />
+      </div>
+    </button>
   );
 }

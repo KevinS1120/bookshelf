@@ -34,14 +34,20 @@ Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.y
 
 ## Features
 
-- Library with covers, search, filters, sort, and reading stats
+- Library with covers, search, filters, and sorting, in a dark forest-green theme
+- **⋯ menu on every book**: read, change status (To read / Reading / On hold / Finished / Did not
+  finish), start over, change cover, remove
+- **Covers**: upload your own image, search Open Library, restore the book's own cover, or none.
+  Changes sync to every device.
+- **Collections**: tag books (e.g. "Sci-fi", "Class") and filter by collection
+- **Yearly reading goal**, **reading time** (this week, with a 14-day chart), and a **daily streak**
 - Status, 1–5 star ratings, start/finish dates, notes
 - Reader for PDF and EPUB: tap or swipe to turn pages, tap the middle for full screen, drag to jump
 - Bookmarks with text snippets; table of contents
-- Display settings (per device): themes and custom colors, brightness, and for EPUBs text size,
-  font, line spacing, alignment, margins, page width, and one page / two pages / scrolling
+- Display settings (per device): themes including Forest, custom colors, brightness, and for EPUBs
+  text size, font, line spacing, alignment, margins, page width, and one page / two pages / scrolling
 - Recently opened books are kept on each device so they reopen instantly
-- **Settings → Download reading log** exports everything as a CSV
+- Stays signed in; **Settings → Download reading log** exports everything as a CSV
 
 ## Your data
 

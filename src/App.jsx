@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initAuth, isConfigured, signOut } from './auth';
+import { statusPatch } from './util';
 import * as library from './library';
 import Library from './components/Library';
 import BookDetails from './components/BookDetails';
 import Reader from './components/Reader';
+import CoverDialog from './components/CoverDialog';
 import SettingsDialog from './components/SettingsDialog';
 import Welcome from './components/Welcome';
 
@@ -39,10 +41,12 @@ export default function App() {
 
 function Bookshelf({ account, folder }) {
   const [books, setBooks] = useState(null);
+  const [extras, setExtras] = useState({ settings: {}, activity: {} });
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [readingId, setReadingId] = useState(null);
   const [detailsId, setDetailsId] = useState(null);
+  const [coverId, setCoverId] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const readingRef = useRef(null);
   readingRef.current = readingId;
@@ -50,6 +54,7 @@ function Bookshelf({ account, folder }) {
   const refresh = useCallback(async () => {
     try {
       setBooks(await library.listBooks());
+      setExtras(library.getExtras());
       setLoadError('');
     } catch (err) {
       setLoadError(err.message);
@@ -71,7 +76,7 @@ function Bookshelf({ account, folder }) {
     };
   }, [refresh]);
 
-  // Updates the screen immediately, then saves to SharePoint (batched when `delay` is set).
+  // Updates the screen immediately, then saves to OneDrive (batched when `delay` is set).
   // remote: false only updates the screen.
   const updateBook = useCallback((id, patch, { delay = 0, remote = true } = {}) => {
     setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
@@ -110,9 +115,8 @@ function Bookshelf({ account, folder }) {
         /* fall back to what we have */
       }
       const patch = { lastOpenedAt: Date.now() };
-      if (latest.status === 'to-read') {
-        patch.status = 'reading';
-        patch.startedAt = latest.startedAt || Date.now();
+      if (latest.status === 'to-read' || latest.status === 'paused') {
+        Object.assign(patch, statusPatch(latest, 'reading'));
       }
       setBooks((prev) => prev.map((b) => (b.id === book.id ? { ...latest, ...patch } : b)));
       updateBook(book.id, patch);
@@ -128,6 +132,33 @@ function Bookshelf({ account, folder }) {
     refresh();
   }, [refresh]);
 
+  // Quick actions from a book's ⋯ menu.
+  const actions = useMemo(
+    () => ({
+      open: openBook,
+      details: (book) => setDetailsId(book.id),
+      status: (book, status) => updateBook(book.id, statusPatch(book, status)),
+      startOver: (book) => updateBook(book.id, { progress: 0, location: null }),
+      cover: (book) => setCoverId(book.id),
+      remove: (book) => confirm(`Remove "${book.title}" from your library? It goes to your OneDrive recycle bin.`) && removeBook(book.id),
+    }),
+    [openBook, updateBook, removeBook],
+  );
+
+  const allTags = useMemo(
+    () => [...new Set((books ?? []).flatMap((b) => b.tags))].sort((a, b) => a.localeCompare(b)),
+    [books],
+  );
+
+  const setGoal = useCallback(async (year, count) => {
+    setExtras((x) => ({ ...x, settings: { ...x.settings, goals: { ...x.settings.goals, [year]: count || undefined } } }));
+    try {
+      setExtras(await library.setGoal(year, count));
+    } catch (err) {
+      setSaveError(`Couldn't save your goal: ${err.message}`);
+    }
+  }, []);
+
   if (!books) return <div className="loading">Loading your library…</div>;
 
   const reading = books.find((b) => b.id === readingId);
@@ -141,24 +172,36 @@ function Bookshelf({ account, folder }) {
   }
 
   const selected = books.find((b) => b.id === detailsId);
+  const coverBook = books.find((b) => b.id === coverId);
   return (
     <>
       <Library
         books={books}
+        extras={extras}
+        allTags={allTags}
+        actions={actions}
         onAdd={addBook}
-        onSelect={(b) => setDetailsId(b.id)}
-        onOpen={openBook}
         onRefresh={refresh}
         onSettings={() => setShowSettings(true)}
+        onSetGoal={setGoal}
         error={loadError || saveError}
       />
       {selected && (
         <BookDetails
           book={selected}
+          allTags={allTags}
           onUpdate={updateBook}
           onOpen={openBook}
+          onCover={() => setCoverId(selected.id)}
           onDelete={removeBook}
           onClose={() => setDetailsId(null)}
+        />
+      )}
+      {coverBook && (
+        <CoverDialog
+          book={coverBook}
+          onSave={(patch) => updateBook(coverBook.id, patch)}
+          onClose={() => setCoverId(null)}
         />
       )}
       {showSettings && (

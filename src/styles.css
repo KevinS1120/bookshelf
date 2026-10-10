@@ -1,35 +1,20 @@
 :root {
-  --bg: #f7f5f0;
-  --surface: #ffffff;
-  --surface-2: #efece5;
-  --text: #24211c;
-  --muted: #77716a;
-  --border: #e2ddd3;
-  --accent: #b5562c;
-  --accent-text: #ffffff;
-  --accent-soft: #f6e6dd;
-  --star: #e3a008;
-  --danger: #c0392b;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 14px rgb(0 0 0 / 0.07);
+  /* Deep forest green with warm gold accents */
+  --bg: #0d2119;
+  --surface: #133024;
+  --surface-2: #1b3f30;
+  --text: #edf2ea;
+  --muted: #9db5a6;
+  --border: #25503d;
+  --accent: #d8b15e;
+  --accent-text: #1b1405;
+  --accent-soft: #2b4628;
+  --star: #e9c25a;
+  --danger: #ec7b67;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.28);
   --radius: 10px;
   --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #17161a;
-    --surface: #222127;
-    --surface-2: #2c2b32;
-    --text: #ebe8e2;
-    --muted: #9b968e;
-    --border: #36343c;
-    --accent: #e07a4b;
-    --accent-text: #1a1310;
-    --accent-soft: #3a2a22;
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px rgb(0 0 0 / 0.3);
-    color-scheme: dark;
-  }
+  color-scheme: dark;
 }
 
 * {

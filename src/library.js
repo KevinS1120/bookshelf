@@ -33,7 +33,9 @@ const isBookFile = (item) => item.file && /\.(pdf|epub)$/i.test(item.name);
 // other: if the file changed since we read it, we re-read, re-apply, and retry.
 
 const DATA_FILE = '_bookshelf/library.json';
-let data = null; // { doc: { version, books: { [id]: {...} } }, eTag }
+// doc: { version, books: { [id]: {...} }, settings: { goals: { [year]: n } }, activity: { [yyyy-mm-dd]: seconds } }
+let data = null; // { doc, eTag }
+const emptyDoc = () => ({ version: 1, books: {}, settings: {}, activity: {} });
 
 async function readData() {
   let meta;
@@ -41,12 +43,12 @@ async function readData() {
     meta = await graph(itemPath(DATA_FILE));
   } catch (err) {
     if (err.status !== 404) throw err;
-    data = { doc: { version: 1, books: {} }, eTag: null };
+    data = { doc: emptyDoc(), eTag: null };
     return data;
   }
   if (data?.eTag !== meta.eTag) {
     const doc = JSON.parse(await download(meta['@microsoft.graph.downloadUrl'], 'text'));
-    data = { doc: { version: 1, books: {}, ...doc }, eTag: meta.eTag };
+    data = { doc: { ...emptyDoc(), ...doc }, eTag: meta.eTag };
   }
   return data;
 }
@@ -104,13 +106,16 @@ function toBook(item, d = {}) {
     review: d.review || '',
     bookmarks: d.bookmarks ?? [],
     pageCount: d.pageCount ?? null,
+    tags: d.tags ?? [],
+    coverVersion: d.coverVersion ?? null,
+    noCover: !!d.noCover,
     webUrl: item.webUrl,
   };
 }
 
 const FIELDS = [
   'title', 'author', 'status', 'rating', 'progress', 'location', 'progressUpdatedAt', 'startedAt',
-  'finishedAt', 'lastOpenedAt', 'addedAt', 'review', 'bookmarks', 'pageCount',
+  'finishedAt', 'lastOpenedAt', 'addedAt', 'review', 'bookmarks', 'pageCount', 'tags', 'coverVersion', 'noCover',
 ];
 const pick = (patch) => Object.fromEntries(Object.entries(patch).filter(([k]) => FIELDS.includes(k)));
 
@@ -146,19 +151,51 @@ function coverUrls() {
   return coverIndex;
 }
 
-export async function coverBlob(id) {
-  const cached = await cache.getCover(id);
+// A cover changed in the app gets a new version, so every device fetches it again.
+const coverKey = (book) => (book.coverVersion ? `${book.id}@${book.coverVersion}` : book.id);
+const coverPath = (id) => `_bookshelf/covers/${id}.jpg`;
+
+export async function coverBlob(book) {
+  if (book.noCover) return null;
+  const key = coverKey(book);
+  const cached = await cache.getCover(key);
   if (cached) return cached;
-  const url = (await coverUrls()).get(id);
+  let url;
+  if (book.coverVersion) {
+    try {
+      url = (await graph(itemPath(coverPath(book.id))))['@microsoft.graph.downloadUrl'];
+    } catch {
+      return null;
+    }
+  } else {
+    url = (await coverUrls()).get(book.id);
+  }
   if (!url) return null;
   try {
     const blob = await download(url);
-    cache.putCover(id, blob);
+    cache.putCover(key, blob);
     return blob;
   } catch {
     coverIndex = null; // links expire after about an hour; fetch fresh ones next time
     return null;
   }
+}
+
+// Returns the fields to save on the book.
+export async function setCover(book, blob) {
+  await putSmall(coverPath(book.id), blob);
+  const patch = { coverVersion: Date.now(), noCover: false };
+  await cache.putCover(coverKey({ ...book, ...patch }), blob);
+  return patch;
+}
+
+export async function removeCover(book) {
+  try {
+    await graph(itemPath(coverPath(book.id)), { method: 'DELETE' });
+  } catch (err) {
+    if (err.status !== 404) throw err;
+  }
+  return { noCover: true, coverVersion: Date.now() };
 }
 
 export async function getLocations(id) {
@@ -224,7 +261,7 @@ export async function createBook(meta, file, cover, onProgress) {
     doc.books[item.id] = record;
   });
   if (cover) {
-    await putSmall(`_bookshelf/covers/${item.id}.jpg`, cover).catch(() => {});
+    await putSmall(coverPath(item.id), cover).catch(() => {});
     cache.putCover(item.id, cover);
   }
   return toBook(item, record);
@@ -237,9 +274,50 @@ export async function deleteBook(id) {
   updateData((doc) => {
     delete doc.books[id];
   }).catch(() => {});
-  for (const rel of [`_bookshelf/covers/${id}.jpg`, `_bookshelf/locations/${id}.json`]) {
+  for (const rel of [coverPath(id), `_bookshelf/locations/${id}.json`]) {
     graph(itemPath(rel), { method: 'DELETE' }).catch(() => {});
   }
+}
+
+// ---------- goal & reading activity ----------
+
+export function getExtras() {
+  const activity = { ...data?.doc.activity };
+  for (const [day, secs] of Object.entries(pendingActivity)) activity[day] = (activity[day] || 0) + secs; // not saved yet
+  return { settings: data?.doc.settings ?? {}, activity };
+}
+
+export async function setGoal(year, count) {
+  await updateData((doc) => {
+    doc.settings = { ...doc.settings, goals: { ...doc.settings?.goals, [year]: count || undefined } };
+  });
+  return getExtras();
+}
+
+// Reading time is collected per day and saved every so often.
+const pendingActivity = {};
+let activityTimer = null;
+
+const applyActivity = (doc, amounts) => {
+  doc.activity ??= {};
+  for (const [day, secs] of Object.entries(amounts)) doc.activity[day] = (doc.activity[day] || 0) + secs;
+};
+
+function takeActivity() {
+  const amounts = { ...pendingActivity };
+  for (const k of Object.keys(pendingActivity)) delete pendingActivity[k];
+  clearTimeout(activityTimer);
+  activityTimer = null;
+  return amounts;
+}
+
+export function addReadingTime(day, seconds) {
+  if (seconds < 1) return;
+  pendingActivity[day] = (pendingActivity[day] || 0) + Math.round(seconds);
+  activityTimer ??= setTimeout(() => {
+    const amounts = takeActivity();
+    updateData((doc) => applyActivity(doc, amounts)).catch(() => {});
+  }, 30_000);
 }
 
 // ---------- batched updates ----------
@@ -284,7 +362,8 @@ export function flushAll() {
 // The page is going away (tab closed, app switched on a phone): save what's
 // pending with a request that outlives the page. Best effort.
 function flushOnClose() {
-  if (!pending.size || !data) return;
+  const amounts = takeActivity();
+  if ((!pending.size && !Object.keys(amounts).length) || !data) return;
   const patches = [];
   for (const [id, entry] of pending) {
     clearTimeout(entry.timer);
@@ -294,7 +373,10 @@ function flushOnClose() {
     entry.waiters.forEach((w) => w.resolve(null));
   }
   pending.clear();
-  const applyAll = (doc) => patches.forEach(([id, patch]) => applyPatch(doc, id, patch));
+  const applyAll = (doc) => {
+    patches.forEach(([id, patch]) => applyPatch(doc, id, patch));
+    applyActivity(doc, amounts);
+  };
 
   const doc = structuredClone(data.doc);
   applyAll(doc);

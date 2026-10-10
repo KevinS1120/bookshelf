@@ -6,6 +6,7 @@ export const THEMES = [
   { id: 'light', label: 'Light', bg: '#ffffff', fg: '#1f1f1f', link: '#1a5fb4' },
   { id: 'sepia', label: 'Sepia', bg: '#f4ecd8', fg: '#433422', link: '#8a5a1f' },
   { id: 'sage', label: 'Sage', bg: '#e3eadd', fg: '#2c3a2a', link: '#3b6b35' },
+  { id: 'forest', label: 'Forest', bg: '#10271d', fg: '#dfe8dc', link: '#e0bb6a' },
   { id: 'dark', label: 'Dark', bg: '#1c1c1e', fg: '#d6d3cd', link: '#8ab4f8' },
   { id: 'black', label: 'Black', bg: '#000000', fg: '#bdbab4', link: '#8ab4f8' },
   { id: 'custom', label: 'Custom' },
@@ -31,7 +32,7 @@ export const LINE_HEIGHTS = [
 export const PAGE_WIDTH_MAX = 1600; // slider maximum, meaning "no limit"
 
 export const DEFAULT_SETTINGS = {
-  theme: 'light',
+  theme: 'forest',
   customBg: '#fdf6e3',
   customFg: '#2b2b2b',
   font: 'publisher',

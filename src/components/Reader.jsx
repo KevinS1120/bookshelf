@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as library from '../library';
 import { chromeVars, useReaderSettings } from '../settings';
-import { uid } from '../util';
+import { dayKey, uid } from '../util';
 import EpubReader from './EpubReader';
 import PdfReader from './PdfReader';
 import ReaderSettings from './ReaderSettings';
@@ -32,8 +32,31 @@ export default function Reader({ book, onUpdate, onClose }) {
   const { id } = book;
   const bookmarks = book.bookmarks ?? [];
 
+  // Reading time: the time between page turns counts, up to 5 minutes per page,
+  // so a book left open on the table doesn't rack up hours.
+  const lastActiveRef = useRef(Date.now());
+  const creditTime = useCallback(() => {
+    const now = Date.now();
+    const secs = Math.min(now - lastActiveRef.current, 5 * 60_000) / 1000;
+    lastActiveRef.current = now;
+    library.addReadingTime(dayKey(now), secs);
+  }, []);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') creditTime();
+      else lastActiveRef.current = Date.now(); // time away doesn't count
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (document.visibilityState === 'visible') creditTime();
+    };
+  }, [creditTime]);
+
   const handleRelocate = useCallback(
     (p) => {
+      if (posRef.current) creditTime(); // skip the initial position when the book opens
       posRef.current = p;
       setPos(p);
       const patch = p.progress == null ? { location: p.location } : { location: p.location, progress: p.progress };
@@ -41,7 +64,7 @@ export default function Reader({ book, onUpdate, onClose }) {
         if (saved?.progressUpdatedAt) lastSeenRef.current = Math.max(lastSeenRef.current, saved.progressUpdatedAt);
       });
     },
-    [id],
+    [id, creditTime],
   );
 
   // Coming back to this tab (e.g. after reading on another device): check for a newer position.

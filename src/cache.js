@@ -48,11 +48,19 @@ export const putFile = (id, blob) =>
   });
 
 export const getCover = (id) => safe((d) => d.get('covers', id));
-export const putCover = (id, blob) => safe((d) => d.put('covers', blob, id));
+// Keys are "<book id>" or "<book id>@<version>"; older versions of a cover are dropped.
+export const putCover = (key, blob) =>
+  safe(async (d) => {
+    const id = key.split('@')[0];
+    for (const k of await d.getAllKeys('covers')) {
+      if (k !== key && k.split('@')[0] === id) await d.delete('covers', k);
+    }
+    await d.put('covers', blob, key);
+  });
 
 export const removeBook = (id) =>
   safe(async (d) => {
     await d.delete('files', id);
     await d.delete('used', id);
-    await d.delete('covers', id);
+    for (const k of await d.getAllKeys('covers')) if (k.split('@')[0] === id) await d.delete('covers', k);
   });

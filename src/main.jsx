@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import './styles.css';
 import './reader.css';
+import './features.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
