@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as library from '../library';
-import { useBackClose, useWakeLock } from '../native';
+import { useBackClose, useGestureDebug, useWakeLock } from '../native';
 import { chromeVars, useReaderSettings } from '../settings';
 import { dayKey, uid } from '../util';
 import EpubReader from './EpubReader';
@@ -109,6 +109,7 @@ export default function Reader({ book, onUpdate, onClose }) {
   useBackClose(onClose);
   useBackClose(() => setPanel(null), !!panel);
   useWakeLock();
+  const debugLines = useGestureDebug();
 
   const handleZoom = useCallback((pdfZoom) => updateSettings({ pdfZoom }), [updateSettings]);
 
@@ -236,6 +237,7 @@ export default function Reader({ book, onUpdate, onClose }) {
         )}
 
         {settings.dim > 0 && <div className="dimmer" style={{ opacity: settings.dim / 100 }} />}
+        {debugLines.length > 0 && <pre className="touch-test">{debugLines.join(String.fromCharCode(10))}</pre>}
 
         {(panel === 'contents' || panel === 'bookmarks') && (
           <SidePanel

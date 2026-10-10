@@ -264,3 +264,37 @@ body {
 .epub-container {
   touch-action: pan-y;
 }
+
+/* EPUB: an invisible layer over the page that takes taps and swipes. */
+.epub-stage {
+  position: relative;
+}
+.epub-gesture-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Settings → Touch test */
+.touch-test {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 6px;
+  z-index: 6;
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.78);
+  color: #9ef0b0;
+  font: 10px/1.35 ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  pointer-events: none;
+  max-height: 55%;
+  overflow: hidden;
+}

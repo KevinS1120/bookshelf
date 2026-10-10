@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useBackClose, useDragToClose } from '../native';
+import { gestureDebugOn, setGestureDebug, useBackClose, useDragToClose } from '../native';
 import QRCode from 'qrcode';
 import { APP_URL } from '../config';
 import { STATUSES, toDateInput } from '../util';
@@ -28,6 +28,7 @@ function exportCsv(books) {
 export default function SettingsDialog({ account, folder, books, onSignOut, onClose }) {
   const [qr, setQr] = useState(null);
   const deviceUrl = APP_URL;
+  const [touchTest, setTouchTest] = useState(gestureDebugOn);
   const sheetRef = useRef(null);
   useBackClose(onClose);
   useDragToClose(sheetRef, onClose);
@@ -93,6 +94,23 @@ export default function SettingsDialog({ account, folder, books, onSignOut, onCl
           <button className="btn" onClick={onSignOut}>
             Sign out
           </button>
+        </section>
+        <section>
+          <h3>Troubleshooting</h3>
+          <label className="toggle-row">
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch"
+              checked={touchTest}
+              onChange={(e) => {
+                setGestureDebug(e.target.checked);
+                setTouchTest(e.target.checked);
+              }}
+            />
+            Touch test: show what this device reports while you swipe in a book
+          </label>
+          <p className="muted small">Version {__BUILD__}</p>
         </section>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import ePub from 'epubjs';
 import * as library from '../library';
+import { debugGesture } from '../native';
 import { PAGE_WIDTH_MAX, epubCss } from '../settings';
 
 // epub.js's own theme switching leaves old rules behind, so each chapter
@@ -60,6 +61,7 @@ export default function EpubReader({
   const viewerRef = useRef(null);
   const renditionRef = useRef(null);
   const turnRef = useRef(null);
+  const layerRef = useRef(null);
   const bookRef = useRef(null);
   const tocRef = useRef([]);
   const lastRef = useRef({ cfi: initialLocation || null, end: null, atEnd: false, href: '' });
@@ -149,83 +151,20 @@ export default function EpubReader({
     });
     rendition.on('keydown', (e) => live.current.onKey(e));
 
-    // Taps and swipes happen inside the chapter iframe, so translate them to the viewer.
-    let suppressClick = false; // the click a mouse sends after dragging
-    rendition.on('click', (e, contents) => {
-      if (suppressClick) return;
-      if (e.target?.closest?.('a') || contents.window.getSelection()?.toString()) return;
-      const frame = contents.window.frameElement;
-      const viewer = viewerRef.current;
-      if (!frame || !viewer) return;
-      const x = frame.getBoundingClientRect().left + e.clientX;
-      const vr = viewer.getBoundingClientRect();
-      live.current.onTap((x - vr.left) / vr.width);
-    });
-
-    // Drag to turn: the page follows your finger. Within a chapter the pages sit
-    // side by side in a scrolling container, so dragging scrolls it directly;
-    // epub.js notices the scroll and updates the position. Pointer events cover
-    // fingers, pens and mice; the chapter pages are touch-action: pan-y so the
-    // browser leaves sideways drags to us.
-    let drag = null;
     const container = () => rendition.manager?.container;
 
-    const onDown = (e) => {
-      if (scroll || drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      const c = container();
-      if (!c) return;
-      drag = { id: e.pointerId, x: e.screenX, y: e.screenY, t: Date.now(), start: c.scrollLeft, mode: null, dx: 0, doc: e.target.ownerDocument };
-    };
-    const onMove = (e) => {
-      const c = container();
-      if (!drag || e.pointerId !== drag.id || !c) return;
-      const dx = e.screenX - drag.x;
-      const dy = e.screenY - drag.y;
-      if (!drag.mode) {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-        drag.mode = Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'none';
-        if (drag.mode === 'swipe') c.style.scrollBehavior = 'auto';
-      }
-      if (drag.mode !== 'swipe') return;
-      e.preventDefault();
-      drag.doc.getSelection?.()?.removeAllRanges(); // a mouse drag shouldn't select text
-      drag.dx = dx;
-      const max = c.scrollWidth - c.clientWidth;
-      const target = drag.start - dx;
-      c.scrollLeft = Math.min(max, Math.max(0, target));
-      // Past the first/last page of the chapter: stretch a little.
-      const over = target < 0 ? -target : target > max ? max - target : 0;
-      c.style.transform = over ? `translateX(${over * 0.3}px)` : '';
-    };
-    const onUp = (e) => {
-      const c = container();
-      if (!drag || e.pointerId !== drag.id || !c) return;
-      const { mode, dx, start, t } = drag;
-      drag = null;
-      if (mode !== 'swipe') return;
-      suppressClick = true;
-      setTimeout(() => {
-        suppressClick = false;
-      }, 300);
-      c.style.transition = 'transform 0.2s ease-out';
-      c.style.transform = '';
-      setTimeout(() => {
-        c.style.transition = '';
-      }, 220);
-      const v = dx / Math.max(1, Date.now() - t);
-      const commit = e.type !== 'pointercancel' && (Math.abs(dx) > c.clientWidth * 0.2 || (Math.abs(v) > 0.3 && Math.abs(dx) > 20));
-      if (commit) turn(dx < 0 ? 1 : -1, start);
-      else c.scrollTo({ left: start, behavior: 'smooth' });
-    };
-
-    rendition.hooks.content.register((contents) => {
-      const doc = contents.document;
-      doc.addEventListener('pointerdown', onDown);
-      doc.addEventListener('pointermove', onMove);
-      doc.addEventListener('pointerup', onUp);
-      doc.addEventListener('pointercancel', onUp);
-      doc.addEventListener('dragstart', (e) => e.preventDefault());
-    });
+    // Scroll layout has no gesture layer: taps come from inside the chapter iframe.
+    if (scroll) {
+      rendition.on('click', (e, contents) => {
+        if (e.target?.closest?.('a') || contents.window.getSelection()?.toString()) return;
+        const frame = contents.window.frameElement;
+        const viewer = viewerRef.current;
+        if (!frame || !viewer) return;
+        const x = frame.getBoundingClientRect().left + e.clientX;
+        const vr = viewer.getBoundingClientRect();
+        live.current.onTap((x - vr.left) / vr.width);
+      });
+    }
 
     // Animated page turn (buttons, keys, taps, swipes).
     function turn(dir, start = container()?.scrollLeft ?? 0) {
@@ -264,6 +203,134 @@ export default function EpubReader({
       }
     };
   }, [book, settings.layout, scroll, report]);
+
+  // ---------- gestures ----------
+  // An invisible layer over the page catches taps and swipes in this document,
+  // instead of relying on events from inside the chapter's iframe (unreliable on
+  // iPhone). Dragging scrolls the page container with your finger; epub.js
+  // notices the scroll and updates the position. Taps on links are passed on.
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer || scroll) return;
+    let drag = null;
+    const container = () => renditionRef.current?.manager?.container;
+
+    // The element inside the book under a point (for following links).
+    const elementAt = (x, y) => {
+      for (const contents of renditionRef.current?.getContents() ?? []) {
+        const frame = contents.window?.frameElement;
+        if (!frame) continue;
+        const r = frame.getBoundingClientRect();
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+          return contents.document.elementFromPoint(x - r.left, y - r.top);
+        }
+      }
+      return null;
+    };
+
+    const tap = (x, y) => {
+      const link = elementAt(x, y)?.closest?.('a[href]');
+      if (link) return link.click(); // epub.js follows links inside the book
+      const r = layer.getBoundingClientRect();
+      live.current.onTap((x - r.left) / r.width);
+    };
+
+    const begin = (x, y) => {
+      const c = container();
+      drag = c ? { x, y, t: Date.now(), start: c.scrollLeft, mode: null, dx: 0 } : null;
+      debugGesture('start', { x: Math.round(x), container: !!c, scrollLeft: c?.scrollLeft, scrollWidth: c?.scrollWidth });
+    };
+    const moveTo = (x, y) => {
+      const c = container();
+      if (!drag || !c) return false;
+      const dx = x - drag.x;
+      const dy = y - drag.y;
+      if (!drag.mode) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return false;
+        drag.mode = Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'none';
+        debugGesture('mode', { mode: drag.mode, dx: Math.round(dx), dy: Math.round(dy) });
+        if (drag.mode === 'swipe') c.style.scrollBehavior = 'auto';
+      }
+      if (drag.mode !== 'swipe') return false;
+      drag.dx = dx;
+      const max = c.scrollWidth - c.clientWidth;
+      const target = drag.start - dx;
+      c.scrollLeft = Math.min(max, Math.max(0, target));
+      // Past the first/last page of the chapter: stretch a little.
+      const over = target < 0 ? -target : target > max ? max - target : 0;
+      c.style.transform = over ? `translateX(${over * 0.3}px)` : '';
+      return true;
+    };
+    const finish = (x, y, cancelled) => {
+      const c = container();
+      const d = drag;
+      drag = null;
+      if (!d || !c) return;
+      debugGesture('end', { mode: d.mode, dx: Math.round(d.dx), cancelled, scrollLeft: c.scrollLeft });
+      if (d.mode === null && !cancelled) return tap(x, y);
+      if (d.mode !== 'swipe') return;
+      c.style.transition = 'transform 0.2s ease-out';
+      c.style.transform = '';
+      setTimeout(() => {
+        c.style.transition = '';
+      }, 220);
+      const v = d.dx / Math.max(1, Date.now() - d.t);
+      const commit = !cancelled && (Math.abs(d.dx) > c.clientWidth * 0.2 || (Math.abs(v) > 0.3 && Math.abs(d.dx) > 20));
+      if (commit) turnRef.current?.(d.dx < 0 ? 1 : -1, d.start);
+      else c.scrollTo({ left: d.start, behavior: 'smooth' });
+    };
+
+    // Fingers: touch events. Mice/pens: pointer events.
+    const touchStart = (e) => (e.touches.length === 1 ? begin(e.touches[0].clientX, e.touches[0].clientY) : (drag = null));
+    const touchMove = (e) => {
+      const t = e.touches[0];
+      if (t && moveTo(t.clientX, t.clientY) && e.cancelable) e.preventDefault();
+    };
+    const touchEnd = (e) => {
+      const t = e.changedTouches[0];
+      if (e.cancelable) e.preventDefault(); // we handle taps ourselves; no delayed click
+      finish(t?.clientX ?? 0, t?.clientY ?? 0, e.type === 'touchcancel');
+    };
+    let pointerId = null;
+    const pointerDown = (e) => {
+      if (e.pointerType === 'touch' || e.button !== 0) return;
+      pointerId = e.pointerId;
+      begin(e.clientX, e.clientY);
+      try {
+        layer.setPointerCapture(e.pointerId);
+      } catch {
+        /* not capturable */
+      }
+    };
+    const pointerMove = (e) => e.pointerId === pointerId && moveTo(e.clientX, e.clientY) && e.preventDefault();
+    const pointerUp = (e) => {
+      if (e.pointerId !== pointerId) return;
+      pointerId = null;
+      finish(e.clientX, e.clientY, e.type === 'pointercancel');
+    };
+    const prevent = (e) => e.preventDefault();
+
+    layer.addEventListener('touchstart', touchStart, { passive: true });
+    layer.addEventListener('touchmove', touchMove, { passive: false });
+    layer.addEventListener('touchend', touchEnd, { passive: false });
+    layer.addEventListener('touchcancel', touchEnd);
+    layer.addEventListener('pointerdown', pointerDown);
+    layer.addEventListener('pointermove', pointerMove);
+    layer.addEventListener('pointerup', pointerUp);
+    layer.addEventListener('pointercancel', pointerUp);
+    layer.addEventListener('contextmenu', prevent);
+    return () => {
+      layer.removeEventListener('touchstart', touchStart);
+      layer.removeEventListener('touchmove', touchMove);
+      layer.removeEventListener('touchend', touchEnd);
+      layer.removeEventListener('touchcancel', touchEnd);
+      layer.removeEventListener('pointerdown', pointerDown);
+      layer.removeEventListener('pointermove', pointerMove);
+      layer.removeEventListener('pointerup', pointerUp);
+      layer.removeEventListener('pointercancel', pointerUp);
+      layer.removeEventListener('contextmenu', prevent);
+    };
+  }, [scroll, book]);
 
   // Colors can be swapped in place.
   const colorKey = `${settings.theme}|${settings.customBg}|${settings.customFg}`;
@@ -352,12 +419,13 @@ export default function EpubReader({
         ref={viewerRef}
         style={{ paddingInline: `min(${settings.margin}px, 8vw)`, maxWidth }}
         onClick={(e) => {
-          // Clicks in the margins, outside the chapter iframe.
+          // Clicks in the margins (scroll layout, where there's no gesture layer).
           if (e.target !== e.currentTarget) return;
           const r = e.currentTarget.getBoundingClientRect();
           onTap((e.clientX - r.left) / r.width);
         }}
       />
+      {!scroll && <div className="epub-gesture-layer" ref={layerRef} />}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initAuth, isConfigured, signOut } from './auth';
+import { newerVersionAvailable } from './native';
 import { statusPatch } from './util';
 import * as library from './library';
 import Library from './components/Library';
@@ -63,11 +64,20 @@ function Bookshelf({ account, folder }) {
   }, []);
 
   // Pick up changes made on other devices whenever this one comes back into view,
-  // and every so often while the library is open.
+  // and every so often while the library is open. Also reload into a newer
+  // version of the app if one has been published (home-screen apps hang on to old ones).
   useEffect(() => {
     refresh();
     const idle = () => document.visibilityState === 'visible' && !readingRef.current;
-    const onVisible = () => idle() && refresh();
+    const checkForUpdate = async () => {
+      if (idle() && (await newerVersionAvailable()) && idle()) window.location.reload();
+    };
+    checkForUpdate();
+    const onVisible = () => {
+      if (!idle()) return;
+      refresh();
+      checkForUpdate();
+    };
     document.addEventListener('visibilitychange', onVisible);
     const timer = setInterval(() => idle() && refresh(), 30_000);
     return () => {

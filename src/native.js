@@ -13,6 +13,87 @@ export const haptic = (ms = 10) => {
 
 const isTouchLayout = () => window.matchMedia('(max-width: 720px)').matches;
 
+// ---------- touch test (Settings → Touch test) ----------
+// Shows what the device reports while you swipe in a book, to diagnose gestures.
+
+const DEBUG_KEY = 'bookshelf-touch-test';
+const debugLines = [];
+const debugListeners = new Set();
+
+export function gestureDebugOn() {
+  try {
+    return localStorage.getItem(DEBUG_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setGestureDebug(on) {
+  try {
+    if (on) localStorage.setItem(DEBUG_KEY, '1');
+    else localStorage.removeItem(DEBUG_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export function debugGesture(what, data = {}) {
+  if (!gestureDebugOn()) return;
+  const time = new Date().toISOString().slice(17, 22);
+  debugLines.push(`${time} ${what} ${JSON.stringify(data)}`);
+  while (debugLines.length > 16) debugLines.shift();
+  debugListeners.forEach((fn) => fn());
+}
+
+// Lines to show, plus a log of raw touch/pointer events reaching the page.
+export function useGestureDebug() {
+  const [lines, setLines] = useState([]);
+  useEffect(() => {
+    if (!gestureDebugOn()) return;
+    const update = () => setLines([...debugLines]);
+    debugListeners.add(update);
+    let moves = 0;
+    const raw = (e) => {
+      if (e.type.endsWith('move') && ++moves % 10 !== 1) return; // don't flood with moves
+      if (e.type.endsWith('start') || e.type.endsWith('down')) moves = 0;
+      const t = e.target;
+      const where = typeof t?.className === 'string' && t.className ? t.className.split(' ')[0] : t?.tagName;
+      debugGesture(`· ${e.type}`, { on: where, pt: e.pointerType, cancelable: e.cancelable, n: e.touches?.length });
+    };
+    const types = ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'pointerdown', 'pointermove', 'pointerup', 'pointercancel'];
+    types.forEach((type) => document.addEventListener(type, raw, { capture: true, passive: true }));
+    debugGesture('touch test on', { ua: navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 90), standalone: !!navigator.standalone });
+    return () => {
+      debugListeners.delete(update);
+      types.forEach((type) => document.removeEventListener(type, raw, { capture: true }));
+    };
+  }, []);
+  return lines;
+}
+
+// ---------- app updates ----------
+// Home-screen apps can hang on to an old version. Check now and then whether a
+// newer one has been published, and reload into it at a safe moment.
+
+const currentBuild = () => document.querySelector('script[type="module"][src*="assets/"]')?.getAttribute('src')?.split('/').pop();
+
+export async function newerVersionAvailable() {
+  const mine = currentBuild();
+  if (!mine) return false; // development server
+  try {
+    const res = await fetch(`./index.html?check=${Date.now()}`, { cache: 'no-store' });
+    const html = await res.text();
+    const latest = html.match(/assets\/(index-[\w-]+\.js)/)?.[1];
+    if (!latest || latest === mine) return false;
+    // Reload at most once per new version, in case servers briefly disagree.
+    if (sessionStorage.getItem('bookshelf-reloaded-for') === latest) return false;
+    sessionStorage.setItem('bookshelf-reloaded-for', latest);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ---------- back button / back gesture ----------
 // While anything is open (a book, a panel, a menu), there is one extra history
 // entry. Android's back button or the browser's back swipe removes it, which
