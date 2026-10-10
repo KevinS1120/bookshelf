@@ -19,9 +19,6 @@ export default function SidePanel({ tab, onTab, toc, tocIndex, bookmarks, onTocS
             Bookmarks{bookmarks.length ? ` (${bookmarks.length})` : ''}
           </button>
         </div>
-        <button className="icon-btn" onClick={onClose} aria-label="Close">
-          ×
-        </button>
       </div>
 
       <div className="sheet-body flush">

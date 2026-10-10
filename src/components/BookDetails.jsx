@@ -27,9 +27,6 @@ export default function BookDetails({ book, allTags, onUpdate, onOpen, onCover, 
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={sheetRef} className="modal" role="dialog" aria-modal="true" aria-label={book.title}>
         <div className="sheet-handle" data-drag-handle />
-        <button className="icon-btn modal-close" onClick={onClose} aria-label="Close">
-          ×
-        </button>
         <div className="details">
           <div className="details-side">
             <button className="cover-edit" onClick={onCover} title="Change cover">

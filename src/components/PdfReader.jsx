@@ -181,30 +181,37 @@ export default function PdfReader({
   const turning = useRef(false);
   async function animateTurn(dir, fromX = 0) {
     const doc = live.current.pdf;
-    const current = live.current.page;
-    const target = current + dir;
+    const target = live.current.page + dir;
     if (!doc || turning.current || target < 1 || target > doc.numPages) return false;
     turning.current = true;
     const track = trackRef.current;
-    const width = track.offsetWidth + GAP;
-    const incoming = await canvasFor(target);
-    mount(dir > 0 ? nextRef.current : prevRef.current, incoming);
-    track.classList.add('swiping');
-    track.style.transition = 'none';
-    track.style.transform = `translateX(${fromX}px)`;
-    track.getBoundingClientRect(); // apply the starting position before animating
-    track.style.transition = 'transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)';
-    track.style.transform = `translateX(${-dir * width}px)`;
-    await new Promise((r) => setTimeout(r, 270));
-    mount(pageRef.current, incoming); // already rendered, so no flash
-    track.style.transition = 'none';
-    track.style.transform = '';
-    track.classList.remove('swiping');
-    mount(prevRef.current, null);
-    mount(nextRef.current, null);
-    setPage(target);
-    turning.current = false;
-    return true;
+    try {
+      const width = track.offsetWidth + GAP;
+      const incoming = await canvasFor(target);
+      mount(dir > 0 ? nextRef.current : prevRef.current, incoming);
+      track.classList.add('swiping');
+      track.style.transition = 'none';
+      track.style.transform = `translateX(${fromX}px)`;
+      track.getBoundingClientRect(); // apply the starting position before animating
+      track.style.transition = 'transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)';
+      track.style.transform = `translateX(${-dir * width}px)`;
+      await new Promise((r) => setTimeout(r, 270));
+      if (incoming) mount(pageRef.current, incoming); // already rendered, so no flash
+      setPage(target);
+      return true;
+    } catch (err) {
+      console.error(err);
+      setPage(target); // fall back to a plain page change
+      return true;
+    } finally {
+      // Always settle, so a failed render can never leave page turning stuck.
+      track.style.transition = 'none';
+      track.style.transform = '';
+      track.classList.remove('swiping');
+      mount(prevRef.current, null);
+      mount(nextRef.current, null);
+      turning.current = false;
+    }
   }
 
   useImperativeHandle(
@@ -232,103 +239,60 @@ export default function PdfReader({
     [pdf, page, size, renderKey],
   );
 
-  // ---------- touch: drag to turn, pinch to zoom, double-tap to zoom ----------
+  // ---------- gestures ----------
+  // Pointer events cover fingers, pens and mice the same way. The page is set to
+  // touch-action: pan-y, so the browser only handles up/down scrolling and every
+  // sideways drag comes to us. Zoomed in, the browser pans freely instead.
   useEffect(() => {
     const stage = stageRef.current;
     const track = trackRef.current;
+    const pointers = new Map();
     let g = null; // current gesture
     let lastTap = 0;
     let tapTimer = null;
 
-    const pannable = () =>
-      stage.scrollWidth > stage.clientWidth + 2 || (window.visualViewport?.scale ?? 1) > 1.01;
-    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const zoomedIn = () => stage.scrollWidth > stage.clientWidth + 2;
+    const syncTouchAction = () => {
+      stage.style.touchAction = zoomedIn() ? 'pan-x pan-y' : 'pan-y';
+    };
+    syncTouchAction();
+    const ro = new ResizeObserver(syncTouchAction);
+    ro.observe(track);
 
-    const start = (e) => {
-      if (turning.current) return;
-      if (e.touches.length === 2) {
-        g = { mode: 'pinch', d0: dist(e.touches), zoom0: live.current.settings.pdfZoom, scale: 1 };
-        return;
-      }
-      if (e.touches.length !== 1) return;
-      const t = e.touches[0];
-      g = { mode: null, x: t.clientX, y: t.clientY, t: Date.now(), dx: 0 };
+    const spread = () => {
+      const [a, b] = [...pointers.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
     };
 
-    const move = (e) => {
-      if (!g) return;
-      if (g.mode === 'pinch') {
-        if (e.touches.length < 2) return;
-        e.preventDefault();
-        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, g.zoom0 * (dist(e.touches) / g.d0)));
-        g.scale = z / g.zoom0;
-        pageRef.current.style.transform = `scale(${g.scale})`;
-        return;
-      }
-      const t = e.touches[0];
-      const dx = t.clientX - g.x;
-      const dy = t.clientY - g.y;
-      if (!g.mode) {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-        g.mode = Math.abs(dx) > Math.abs(dy) * 1.2 && !pannable() ? 'swipe' : 'scroll';
-        if (g.mode === 'swipe') {
-          const p = live.current.page;
-          track.classList.add('swiping');
-          track.style.transition = 'none';
-          canvasFor(p - 1).then((c) => g?.mode === 'swipe' && mount(prevRef.current, c));
-          canvasFor(p + 1).then((c) => g?.mode === 'swipe' && mount(nextRef.current, c));
-        }
-      }
-      if (g.mode !== 'swipe') return;
-      e.preventDefault();
+    const showNeighbours = () => {
       const p = live.current.page;
-      const atEdge = (dx > 0 && p <= 1) || (dx < 0 && p >= live.current.pdf.numPages);
-      g.dx = atEdge ? dx * 0.3 : dx; // rubber band at the first/last page
-      track.style.transform = `translateX(${g.dx}px)`;
+      track.classList.add('swiping');
+      track.style.transition = 'none';
+      canvasFor(p - 1).then((c) => g?.mode === 'swipe' && mount(prevRef.current, c));
+      canvasFor(p + 1).then((c) => g?.mode === 'swipe' && mount(nextRef.current, c));
     };
 
-    const end = async (e) => {
-      if (!g) return;
-      const gesture = g;
-      if (gesture.mode === 'pinch') {
-        if (e.touches.length > 0) return; // wait for the last finger
-        g = null;
-        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, gesture.zoom0 * gesture.scale));
-        // The scaled snapshot stays until the sharper re-render replaces it.
-        if (Math.abs(z - gesture.zoom0) > 0.02) live.current.onZoom(Math.round(z * 100) / 100);
-        else pageRef.current.style.transform = '';
-        return;
-      }
-      g = null;
-      if (gesture.mode === 'swipe') {
-        const dt = Math.max(1, Date.now() - gesture.t);
-        const v = gesture.dx / dt;
-        const dir = gesture.dx < 0 ? 1 : -1;
-        const commit = Math.abs(gesture.dx) > stage.clientWidth * 0.22 || (Math.abs(v) > 0.35 && Math.abs(gesture.dx) > 25);
-        if (commit && (await animateTurn(dir, gesture.dx))) return;
-        track.style.transition = 'transform 0.22s ease-out';
-        track.style.transform = '';
-        setTimeout(() => {
-          if (turning.current) return;
-          track.classList.remove('swiping');
-          mount(prevRef.current, null);
-          mount(nextRef.current, null);
-        }, 230);
-        return;
-      }
-      if (gesture.mode !== null) return; // scrolled
-      // A tap. Double-tap in the middle zooms in/out; single taps are handled after a short wait there.
-      const t = e.changedTouches[0];
+    const snapBack = () => {
+      track.style.transition = 'transform 0.22s ease-out';
+      track.style.transform = '';
+      setTimeout(() => {
+        if (turning.current) return;
+        track.classList.remove('swiping');
+        mount(prevRef.current, null);
+        mount(nextRef.current, null);
+      }, 230);
+    };
+
+    const handleTap = (x) => {
       const r = stage.getBoundingClientRect();
-      const frac = (t.clientX - r.left) / r.width;
-      e.preventDefault(); // we handle the tap ourselves (no delayed click)
+      const frac = (x - r.left) / r.width;
+      // Double-tap in the middle zooms in/out; a single tap there waits a moment to see.
       if (frac > 0.3 && frac < 0.7) {
         const now = Date.now();
         if (now - lastTap < 300) {
           clearTimeout(tapTimer);
           lastTap = 0;
-          const z = live.current.settings.pdfZoom;
-          live.current.onZoom(z > 1.05 ? 1 : 2);
+          live.current.onZoom(live.current.settings.pdfZoom > 1.05 ? 1 : 2);
           return;
         }
         lastTap = now;
@@ -338,25 +302,98 @@ export default function PdfReader({
       }
     };
 
-    // Mouse clicks (touch taps are handled above).
-    const click = (e) => {
-      if (e.pointerType === 'touch' || e.sourceCapabilities?.firesTouchEvents) return;
-      const r = stage.getBoundingClientRect();
-      live.current.onTap((e.clientX - r.left) / r.width);
+    const down = (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (turning.current) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2 && e.pointerType === 'touch') {
+        if (g?.mode === 'swipe') snapBack();
+        g = { mode: 'pinch', d0: spread(), zoom0: live.current.settings.pdfZoom, scale: 1 };
+        return;
+      }
+      if (pointers.size > 1) return;
+      g = { mode: null, id: e.pointerId, x: e.clientX, y: e.clientY, t: Date.now(), dx: 0 };
+      try {
+        stage.setPointerCapture(e.pointerId);
+      } catch {
+        /* not capturable */
+      }
     };
 
-    stage.addEventListener('touchstart', start, { passive: true });
-    stage.addEventListener('touchmove', move, { passive: false });
-    stage.addEventListener('touchend', end, { passive: false });
-    stage.addEventListener('touchcancel', end);
-    stage.addEventListener('click', click);
+    const move = (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!g) return;
+      if (g.mode === 'pinch') {
+        if (pointers.size < 2) return;
+        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, g.zoom0 * (spread() / g.d0)));
+        g.scale = z / g.zoom0;
+        pageRef.current.style.transform = `scale(${g.scale})`;
+        return;
+      }
+      if (e.pointerId !== g.id) return;
+      const dx = e.clientX - g.x;
+      const dy = e.clientY - g.y;
+      if (!g.mode) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        g.mode = Math.abs(dx) > Math.abs(dy) && !zoomedIn() ? 'swipe' : 'pan';
+        if (g.mode === 'swipe') showNeighbours();
+      }
+      if (g.mode !== 'swipe') return;
+      e.preventDefault();
+      const p = live.current.page;
+      const atEdge = (dx > 0 && p <= 1) || (dx < 0 && p >= live.current.pdf.numPages);
+      g.dx = atEdge ? dx * 0.3 : dx; // rubber band at the first/last page
+      track.style.transform = `translateX(${g.dx}px)`;
+    };
+
+    const up = async (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.delete(e.pointerId);
+      if (!g) return;
+      const gesture = g;
+      if (gesture.mode === 'pinch') {
+        if (pointers.size > 0) return; // wait for the last finger
+        g = null;
+        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, gesture.zoom0 * gesture.scale));
+        // The scaled snapshot stays until the sharper re-render replaces it.
+        if (Math.abs(z - gesture.zoom0) > 0.02) live.current.onZoom(Math.round(z * 100) / 100);
+        else pageRef.current.style.transform = '';
+        return;
+      }
+      if (e.pointerId !== gesture.id) return;
+      g = null;
+      if (e.type === 'pointercancel') {
+        if (gesture.mode === 'swipe') snapBack();
+        return;
+      }
+      if (gesture.mode === 'swipe') {
+        const v = gesture.dx / Math.max(1, Date.now() - gesture.t);
+        const dir = gesture.dx < 0 ? 1 : -1;
+        const commit = Math.abs(gesture.dx) > stage.clientWidth * 0.2 || (Math.abs(v) > 0.3 && Math.abs(gesture.dx) > 20);
+        if (!(commit && (await animateTurn(dir, gesture.dx)))) snapBack();
+        return;
+      }
+      if (gesture.mode === null) handleTap(e.clientX);
+    };
+
+    stage.addEventListener('pointerdown', down);
+    stage.addEventListener('pointermove', move);
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', up);
+    // Stop the browser's own drag-an-image / long-press menu getting in the way.
+    const prevent = (e) => e.preventDefault();
+    stage.addEventListener('dragstart', prevent);
+    stage.addEventListener('contextmenu', prevent);
     return () => {
       clearTimeout(tapTimer);
-      stage.removeEventListener('touchstart', start);
-      stage.removeEventListener('touchmove', move);
-      stage.removeEventListener('touchend', end);
-      stage.removeEventListener('touchcancel', end);
-      stage.removeEventListener('click', click);
+      ro.disconnect();
+      stage.removeEventListener('pointerdown', down);
+      stage.removeEventListener('pointermove', move);
+      stage.removeEventListener('pointerup', up);
+      stage.removeEventListener('pointercancel', up);
+      stage.removeEventListener('dragstart', prevent);
+      stage.removeEventListener('contextmenu', prevent);
     };
     // canvasFor/animateTurn read the latest values through live.current and refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps

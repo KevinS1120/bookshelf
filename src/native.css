@@ -248,3 +248,19 @@ input.switch:checked::after {
     height: 44px;
   }
 }
+
+/* No browser swipe-to-go-back/forward or bounce chaining while using the app. */
+html,
+body {
+  overscroll-behavior-x: none;
+}
+.modal,
+.sheet-body {
+  overscroll-behavior: contain;
+}
+/* Sideways drags on book pages turn pages; the browser only scrolls up/down. */
+.epub-stage,
+.epub-viewer,
+.epub-container {
+  touch-action: pan-y;
+}

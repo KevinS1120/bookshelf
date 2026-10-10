@@ -150,7 +150,9 @@ export default function EpubReader({
     rendition.on('keydown', (e) => live.current.onKey(e));
 
     // Taps and swipes happen inside the chapter iframe, so translate them to the viewer.
+    let suppressClick = false; // the click a mouse sends after dragging
     rendition.on('click', (e, contents) => {
+      if (suppressClick) return;
       if (e.target?.closest?.('a') || contents.window.getSelection()?.toString()) return;
       const frame = contents.window.frameElement;
       const viewer = viewerRef.current;
@@ -159,28 +161,34 @@ export default function EpubReader({
       const vr = viewer.getBoundingClientRect();
       live.current.onTap((x - vr.left) / vr.width);
     });
+
     // Drag to turn: the page follows your finger. Within a chapter the pages sit
     // side by side in a scrolling container, so dragging scrolls it directly;
-    // epub.js notices the scroll and updates the position.
+    // epub.js notices the scroll and updates the position. Pointer events cover
+    // fingers, pens and mice; the chapter pages are touch-action: pan-y so the
+    // browser leaves sideways drags to us.
     let drag = null;
     const container = () => rendition.manager?.container;
-    rendition.on('touchstart', (e) => {
-      const t = e.touches?.[0];
+
+    const onDown = (e) => {
+      if (scroll || drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
       const c = container();
-      drag = !scroll && c && t && e.touches.length === 1 ? { x: t.screenX, y: t.screenY, t: Date.now(), start: c.scrollLeft, mode: null, dx: 0 } : null;
-    });
-    rendition.on('touchmove', (e) => {
+      if (!c) return;
+      drag = { id: e.pointerId, x: e.screenX, y: e.screenY, t: Date.now(), start: c.scrollLeft, mode: null, dx: 0, doc: e.target.ownerDocument };
+    };
+    const onMove = (e) => {
       const c = container();
-      const t = e.touches?.[0];
-      if (!drag || !c || !t || e.touches.length !== 1) return;
-      const dx = t.screenX - drag.x;
-      const dy = t.screenY - drag.y;
+      if (!drag || e.pointerId !== drag.id || !c) return;
+      const dx = e.screenX - drag.x;
+      const dy = e.screenY - drag.y;
       if (!drag.mode) {
         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-        drag.mode = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'swipe' : 'none';
+        drag.mode = Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'none';
         if (drag.mode === 'swipe') c.style.scrollBehavior = 'auto';
       }
       if (drag.mode !== 'swipe') return;
+      e.preventDefault();
+      drag.doc.getSelection?.()?.removeAllRanges(); // a mouse drag shouldn't select text
       drag.dx = dx;
       const max = c.scrollWidth - c.clientWidth;
       const target = drag.start - dx;
@@ -188,22 +196,35 @@ export default function EpubReader({
       // Past the first/last page of the chapter: stretch a little.
       const over = target < 0 ? -target : target > max ? max - target : 0;
       c.style.transform = over ? `translateX(${over * 0.3}px)` : '';
-    });
-    rendition.on('touchend', () => {
+    };
+    const onUp = (e) => {
       const c = container();
-      if (!drag || !c) return;
+      if (!drag || e.pointerId !== drag.id || !c) return;
       const { mode, dx, start, t } = drag;
       drag = null;
       if (mode !== 'swipe') return;
+      suppressClick = true;
+      setTimeout(() => {
+        suppressClick = false;
+      }, 300);
       c.style.transition = 'transform 0.2s ease-out';
       c.style.transform = '';
       setTimeout(() => {
         c.style.transition = '';
       }, 220);
       const v = dx / Math.max(1, Date.now() - t);
-      const commit = Math.abs(dx) > c.clientWidth * 0.2 || (Math.abs(v) > 0.35 && Math.abs(dx) > 25);
+      const commit = e.type !== 'pointercancel' && (Math.abs(dx) > c.clientWidth * 0.2 || (Math.abs(v) > 0.3 && Math.abs(dx) > 20));
       if (commit) turn(dx < 0 ? 1 : -1, start);
       else c.scrollTo({ left: start, behavior: 'smooth' });
+    };
+
+    rendition.hooks.content.register((contents) => {
+      const doc = contents.document;
+      doc.addEventListener('pointerdown', onDown);
+      doc.addEventListener('pointermove', onMove);
+      doc.addEventListener('pointerup', onUp);
+      doc.addEventListener('pointercancel', onUp);
+      doc.addEventListener('dragstart', (e) => e.preventDefault());
     });
 
     // Animated page turn (buttons, keys, taps, swipes).

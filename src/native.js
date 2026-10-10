@@ -67,7 +67,20 @@ export function useBackClose(onClose, active = true) {
   }, [active]);
 }
 
-// ---------- drag a bottom sheet down to dismiss (phones) ----------
+// ---------- swipe a panel down to dismiss (touch screens) ----------
+// Works from anywhere on the panel: dragging down while its content is scrolled
+// to the top pulls the panel down; let go far enough (or flick) and it closes.
+
+const isTouchScreen = () => window.matchMedia('(pointer: coarse)').matches || isTouchLayout();
+
+// Whether something between the touch and the panel is scrolled down (then the
+// drag should scroll it back up instead of closing the panel).
+function scrolledDown(target, panel) {
+  for (let node = target; node && node !== panel.parentNode; node = node.parentNode) {
+    if (node.nodeType === 1 && node.scrollTop > 0 && node.scrollHeight > node.clientHeight) return true;
+  }
+  return false;
+}
 
 export function useDragToClose(ref, onClose, { enabled = true } = {}) {
   const onCloseRef = useRef(onClose);
@@ -76,39 +89,56 @@ export function useDragToClose(ref, onClose, { enabled = true } = {}) {
     const el = ref.current;
     if (!el || !enabled) return;
     let drag = null;
+    const backdrop = el.parentElement?.classList.contains('modal-backdrop') ? el.parentElement : null;
 
     const start = (e) => {
-      if (!isTouchLayout() || e.touches.length !== 1) return;
-      const t = e.touches[0];
-      const top = el.getBoundingClientRect().top;
-      const onHandle = e.target.closest?.('[data-drag-handle]');
-      // Drag from the handle/header, or from anywhere when the sheet is scrolled to the top.
-      const inHeader = t.clientY - top < 64;
-      if (!onHandle && !(inHeader && el.scrollTop <= 0)) return;
+      if (!isTouchScreen() || e.touches.length !== 1) return;
       if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
-      drag = { y: t.clientY, t: Date.now(), dy: 0 };
+      const t = e.touches[0];
+      const onHandle = !!e.target.closest?.('[data-drag-handle]');
+      if (!onHandle && scrolledDown(e.target, el)) return;
+      drag = { x: t.clientX, y: t.clientY, t: Date.now(), dy: 0, active: onHandle, onHandle };
     };
     const move = (e) => {
       if (!drag) return;
-      drag.dy = Math.max(0, e.touches[0].clientY - drag.y);
-      if (drag.dy > 4) {
-        e.preventDefault();
-        el.style.transition = 'none';
-        el.style.transform = `translateY(${drag.dy}px)`;
+      const t = e.touches[0];
+      const dx = t.clientX - drag.x;
+      const dy = t.clientY - drag.y;
+      if (!drag.active) {
+        // Pulling down at the top: claim the gesture right away so the page doesn't scroll/bounce.
+        if (dy > 0 && dy >= Math.abs(dx)) {
+          e.preventDefault();
+          if (dy > 6) drag.active = true;
+        } else if (Math.abs(dx) > 6 || dy < -2) {
+          drag = null; // a sideways drag or a scroll up: not ours
+        }
+        if (!drag?.active) return;
+      }
+      e.preventDefault();
+      drag.dy = Math.max(0, dy);
+      el.style.transition = 'none';
+      el.style.transform = `translateY(${drag.dy}px)`;
+      if (backdrop) {
+        backdrop.style.transition = 'none';
+        backdrop.style.backgroundColor = `rgb(0 0 0 / ${0.45 * Math.max(0, 1 - drag.dy / 400)})`;
       }
     };
     const end = () => {
       if (!drag) return;
-      const { dy, t } = drag;
+      const { dy, t, active } = drag;
       drag = null;
-      const fast = dy / Math.max(1, Date.now() - t) > 0.6;
+      if (!active) return;
+      const fast = dy / Math.max(1, Date.now() - t) > 0.5;
       el.style.transition = 'transform 0.22s ease-out';
-      if (dy > 120 || (fast && dy > 30)) {
-        el.style.transform = 'translateY(100%)';
+      if (backdrop) backdrop.style.transition = 'background-color 0.22s ease-out';
+      if (dy > 110 || (fast && dy > 30)) {
+        el.style.transform = 'translateY(100vh)';
+        if (backdrop) backdrop.style.backgroundColor = 'rgb(0 0 0 / 0)';
         haptic(8);
-        setTimeout(() => onCloseRef.current(), 180);
+        setTimeout(() => onCloseRef.current(), 200);
       } else {
         el.style.transform = '';
+        if (backdrop) backdrop.style.backgroundColor = '';
       }
     };
     el.addEventListener('touchstart', start, { passive: true });

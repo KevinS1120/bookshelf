@@ -40,9 +40,6 @@ export default function ReaderSettings({ settings: s, onChange, onReset, format,
       <div className="sheet-handle" data-drag-handle />
       <div className="sheet-head" data-drag-handle>
         <strong>Display</strong>
-        <button className="icon-btn" onClick={onClose} aria-label="Close">
-          ×
-        </button>
       </div>
       <div className="sheet-body">
         <Row label="Theme">

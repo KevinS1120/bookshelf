@@ -46,9 +46,6 @@ export default function SettingsDialog({ account, folder, books, onSignOut, onCl
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={sheetRef} className="modal settings" role="dialog" aria-modal="true" aria-label="Settings">
         <div className="sheet-handle" data-drag-handle />
-        <button className="icon-btn modal-close" onClick={onClose} aria-label="Close">
-          ×
-        </button>
         <h2>Settings</h2>
 
         <section>

@@ -56,9 +56,6 @@ export default function CoverDialog({ book, onSave, onClose }) {
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div ref={sheetRef} className="modal cover-dialog" role="dialog" aria-modal="true" aria-label="Change cover">
         <div className="sheet-handle" data-drag-handle />
-        <button className="icon-btn modal-close" onClick={onClose} aria-label="Close" disabled={!!busy}>
-          ×
-        </button>
         <h2>Change cover</h2>
         <p className="muted clamp-1">{book.title}</p>
 

@@ -79,6 +79,8 @@ export function epubCss(s) {
   const c = themeColors(s);
   const recolor = s.theme !== 'light';
   let css = `html, body { background: ${c.bg} !important; ${recolor ? `color: ${c.fg} !important;` : ''} }\n`;
+  // Sideways drags turn pages (handled by the app); the browser only scrolls up/down.
+  css += 'html, body { touch-action: pan-y; overscroll-behavior: none; }\n';
   if (recolor) {
     css += `body * { color: inherit !important; background-color: transparent !important; }
       a, a * { color: ${c.link} !important; }\n`;
