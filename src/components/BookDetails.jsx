@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useBackClose, useDragToClose } from '../native';
 import { STATUSES, formatDate, formatSize, fromDateInput, statusPatch, toDateInput } from '../util';
 import Cover from './Cover';
 import Stars from './Stars';
@@ -15,13 +16,17 @@ export default function BookDetails({ book, allTags, onUpdate, onOpen, onCover, 
   }, [onClose]);
 
   const setStatus = (status) => update(statusPatch(book, status));
+  const sheetRef = useRef(null);
+  useBackClose(onClose);
+  useDragToClose(sheetRef, onClose);
 
   const pct = Math.round(book.progress * 100);
   const action = book.progress > 0 && book.progress < 1 ? `Continue reading (${pct}%)` : 'Read';
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={book.title}>
+      <div ref={sheetRef} className="modal" role="dialog" aria-modal="true" aria-label={book.title}>
+        <div className="sheet-handle" data-drag-handle />
         <button className="icon-btn modal-close" onClick={onClose} aria-label="Close">
           ×
         </button>

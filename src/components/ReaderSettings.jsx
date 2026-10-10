@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+import { useDragToClose } from '../native';
 import { FONTS, LINE_HEIGHTS, PAGE_WIDTH_MAX, THEMES } from '../settings';
 
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
@@ -28,11 +30,15 @@ function Row({ label, value, children }) {
 
 export default function ReaderSettings({ settings: s, onChange, onReset, format, onClose }) {
   const epub = format === 'epub';
-  const zoomIdx = ZOOMS.indexOf(s.pdfZoom);
+  // Pinch-zoom can land between the preset steps; use the nearest one.
+  const zoomIdx = ZOOMS.reduce((best, z, i) => (Math.abs(z - s.pdfZoom) < Math.abs(ZOOMS[best] - s.pdfZoom) ? i : best), 0);
+  const sheetRef = useRef(null);
+  useDragToClose(sheetRef, onClose);
 
   return (
-    <div className="sheet settings-sheet" role="dialog" aria-label="Display settings">
-      <div className="sheet-head">
+    <div ref={sheetRef} className="sheet settings-sheet" role="dialog" aria-label="Display settings">
+      <div className="sheet-handle" data-drag-handle />
+      <div className="sheet-head" data-drag-handle>
         <strong>Display</strong>
         <button className="icon-btn" onClick={onClose} aria-label="Close">
           ×
@@ -183,8 +189,8 @@ export default function ReaderSettings({ settings: s, onChange, onReset, format,
             <Row label="Zoom" value={`${Math.round(s.pdfZoom * 100)}%`}>
               <div className="stepper">
                 <button
-                  onClick={() => onChange({ pdfZoom: ZOOMS[zoomIdx - 1] })}
-                  disabled={zoomIdx <= 0}
+                  onClick={() => onChange({ pdfZoom: ZOOMS[Math.max(0, zoomIdx - (ZOOMS[zoomIdx] < s.pdfZoom ? 0 : 1))] })}
+                  disabled={s.pdfZoom <= ZOOMS[0]}
                   aria-label="Zoom out"
                 >
                   −
@@ -193,12 +199,12 @@ export default function ReaderSettings({ settings: s, onChange, onReset, format,
                   type="range"
                   min="0"
                   max={ZOOMS.length - 1}
-                  value={Math.max(0, zoomIdx)}
+                  value={zoomIdx}
                   onChange={(e) => onChange({ pdfZoom: ZOOMS[Number(e.target.value)] })}
                 />
                 <button
-                  onClick={() => onChange({ pdfZoom: ZOOMS[zoomIdx + 1] })}
-                  disabled={zoomIdx >= ZOOMS.length - 1}
+                  onClick={() => onChange({ pdfZoom: ZOOMS[Math.min(ZOOMS.length - 1, zoomIdx + (ZOOMS[zoomIdx] > s.pdfZoom ? 0 : 1))] })}
+                  disabled={s.pdfZoom >= ZOOMS[ZOOMS.length - 1]}
                   aria-label="Zoom in"
                 >
                   +
@@ -206,10 +212,10 @@ export default function ReaderSettings({ settings: s, onChange, onReset, format,
               </div>
             </Row>
             <label className="toggle-row">
-              <input type="checkbox" checked={s.pdfRecolor} onChange={(e) => onChange({ pdfRecolor: e.target.checked })} />
+              <input type="checkbox" role="switch" className="switch" checked={s.pdfRecolor} onChange={(e) => onChange({ pdfRecolor: e.target.checked })} />
               Tint pages to match the theme
             </label>
-            <p className="set-hint">PDFs have fixed layouts, so font and spacing options only apply to EPUBs.</p>
+            <p className="set-hint">Pinch to zoom, or double-tap the middle of the page. PDFs have fixed layouts, so font and spacing options only apply to EPUBs.</p>
           </>
         )}
 

@@ -1,0 +1,250 @@
+/* ---------- app-like feel ---------- */
+
+body {
+  /* No browser pull-to-refresh/reload or scroll chaining; the app has its own. */
+  overscroll-behavior-y: contain;
+}
+
+/* Controls behave like app controls, not web page text. */
+button,
+.btn,
+.menu,
+.tabs,
+.collections,
+.reader-bar,
+.reader-footer,
+.sheet-head,
+.stat,
+.cover-wrap,
+img {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+button,
+a,
+input,
+select,
+label {
+  touch-action: manipulation; /* no double-tap zoom delay */
+}
+img {
+  -webkit-user-drag: none;
+}
+
+/* Press feedback on touch screens */
+@media (hover: none) {
+  .btn,
+  .icon-btn,
+  .menu-btn,
+  .menu button,
+  .continue-main,
+  .setup-option,
+  .stat-button,
+  .tabs button,
+  .collections button,
+  .seg button,
+  .theme-chip,
+  .font-grid button,
+  .list-item,
+  .cover-result,
+  .tag-suggest button {
+    transition: transform 0.08s ease-out, background-color 0.12s;
+  }
+  .btn:active,
+  .icon-btn:active,
+  .menu-btn:active,
+  .continue-main:active,
+  .setup-option:active,
+  .stat-button:active,
+  .tabs button:active,
+  .collections button:active,
+  .seg button:active,
+  .theme-chip:active,
+  .font-grid button:active,
+  .cover-result:active,
+  .tag-suggest button:active {
+    transform: scale(0.96);
+  }
+  .book-open:active .cover-wrap {
+    transform: scale(0.97);
+    transition: transform 0.08s ease-out;
+  }
+  .menu button:active,
+  .list-item:active {
+    background: var(--surface-2);
+  }
+}
+
+/* Screens slide in like an app */
+.reader {
+  animation: screen-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes screen-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+/* On/off switch */
+input.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 46px !important;
+  height: 28px !important;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--r-fg, var(--text)) 22%, transparent);
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin: 0;
+}
+input.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+input.switch:checked {
+  background: var(--accent);
+}
+input.switch:checked::after {
+  transform: translateX(18px);
+}
+.toggle-row {
+  justify-content: space-between;
+  flex-direction: row-reverse;
+}
+
+/* Grab handle on bottom sheets (phones only) */
+.sheet-handle {
+  display: none;
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, currentColor 30%, transparent);
+  margin: 0 auto 10px;
+  flex-shrink: 0;
+}
+
+/* Pull to refresh */
+.ptr {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) - 40px);
+  left: 50%;
+  margin-left: -20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+  z-index: 30;
+  pointer-events: none;
+}
+.ptr-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid var(--accent);
+  border-top-color: transparent;
+}
+.ptr-spinner.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Action sheet (book menu on phones) */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: rgb(0 0 0 / 0.45);
+  animation: fade 0.15s ease-out;
+}
+.menu.menu-sheet {
+  left: 8px;
+  right: 8px;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  top: auto;
+  min-width: 0;
+  max-height: calc(100% - 40px - env(safe-area-inset-top));
+  overflow: auto;
+  border-radius: 16px;
+  padding: 8px 8px 8px;
+  animation: sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.menu-sheet button {
+  padding: 13px 14px 13px 34px;
+  font-size: 16px;
+}
+.menu-sheet button.checked::before {
+  left: 13px;
+}
+.menu-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.menu-title .sheet-handle {
+  display: block;
+}
+.menu-title .muted {
+  font-size: 13px;
+}
+.menu-cancel {
+  margin-top: 8px;
+  text-align: center !important;
+  padding: 13px !important;
+  font-weight: 600;
+  border-radius: 12px !important;
+  background: var(--surface-2) !important;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (max-width: 720px) {
+  .sheet-handle {
+    display: block;
+  }
+  .modal {
+    animation: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .modal .sheet-handle {
+    margin-top: -8px;
+  }
+  .sheet {
+    animation: sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .sheet .sheet-handle {
+    margin: 8px auto 0;
+  }
+  .sheet .sheet-head {
+    border-bottom: none;
+  }
+  .reader .icon-btn {
+    min-width: 44px;
+    height: 44px;
+  }
+}

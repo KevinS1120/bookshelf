@@ -53,6 +53,11 @@ export async function initAuth() {
     result = await msal.handleRedirectPromise();
   } catch (err) {
     if (!needsUser(err)) throw err; // a quiet renewal that needs you: show the sign-in button
+  } finally {
+    // Don't leave the one-time sign-in code in the address bar (or in history).
+    if (/[#&](code|error|state)=/.test(window.location.hash)) {
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+    }
   }
   if (result?.account) msal.setActiveAccount(result.account);
   if (!msal.getActiveAccount()) {

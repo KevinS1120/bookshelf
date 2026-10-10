@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { extractCover } from '../importBook';
 import { fetchImage, searchCovers, toCoverJpeg } from '../images';
 import { fileBlob, removeCover, setCover } from '../library';
+import { useBackClose, useDragToClose } from '../native';
 import Cover from './Cover';
 
 export default function CoverDialog({ book, onSave, onClose }) {
@@ -11,6 +12,9 @@ export default function CoverDialog({ book, onSave, onClose }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const fileRef = useRef(null);
+  const sheetRef = useRef(null);
+  useBackClose(onClose);
+  useDragToClose(sheetRef, onClose, { enabled: !busy });
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && !busy && onClose();
@@ -50,7 +54,8 @@ export default function CoverDialog({ book, onSave, onClose }) {
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div className="modal cover-dialog" role="dialog" aria-modal="true" aria-label="Change cover">
+      <div ref={sheetRef} className="modal cover-dialog" role="dialog" aria-modal="true" aria-label="Change cover">
+        <div className="sheet-handle" data-drag-handle />
         <button className="icon-btn modal-close" onClick={onClose} aria-label="Close" disabled={!!busy}>
           ×
         </button>

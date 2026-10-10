@@ -42,7 +42,12 @@ Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.y
 - **Collections**: tag books (e.g. "Sci-fi", "Class") and filter by collection
 - **Yearly reading goal**, **reading time** (this week, with a 14-day chart), and a **daily streak**
 - Status, 1–5 star ratings, start/finish dates, notes
-- Reader for PDF and EPUB: tap or swipe to turn pages, tap the middle for full screen, drag to jump
+- Reader for PDF and EPUB: drag pages with your finger to turn them (the next page slides in),
+  tap the sides, or use the arrow keys; tap the middle for full screen; drag the bar to jump
+- PDFs: pinch to zoom, double-tap the middle to zoom in/out
+- App-like controls: back button/gesture closes the open book or panel, panels slide up and can
+  be dragged down to dismiss, long-press a book for its actions, pull down to refresh, the screen
+  stays on while reading
 - Bookmarks with text snippets; table of contents
 - Display settings (per device): themes including Forest, custom colors, brightness, and for EPUBs
   text size, font, line spacing, alignment, margins, page width, and one page / two pages / scrolling

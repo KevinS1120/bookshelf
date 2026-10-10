@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useBackClose, useDragToClose } from '../native';
 import QRCode from 'qrcode';
 import { APP_URL } from '../config';
 import { STATUSES, toDateInput } from '../util';
@@ -27,6 +28,9 @@ function exportCsv(books) {
 export default function SettingsDialog({ account, folder, books, onSignOut, onClose }) {
   const [qr, setQr] = useState(null);
   const deviceUrl = APP_URL;
+  const sheetRef = useRef(null);
+  useBackClose(onClose);
+  useDragToClose(sheetRef, onClose);
 
   useEffect(() => {
     QRCode.toDataURL(deviceUrl, { margin: 1, width: 240 }).then(setQr, () => {});
@@ -40,7 +44,8 @@ export default function SettingsDialog({ account, folder, books, onSignOut, onCl
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal settings" role="dialog" aria-modal="true" aria-label="Settings">
+      <div ref={sheetRef} className="modal settings" role="dialog" aria-modal="true" aria-label="Settings">
+        <div className="sheet-handle" data-drag-handle />
         <button className="icon-btn modal-close" onClick={onClose} aria-label="Close">
           ×
         </button>

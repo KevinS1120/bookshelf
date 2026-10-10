@@ -1,11 +1,16 @@
+import { useRef } from 'react';
+import { useDragToClose } from '../native';
 import { formatDate } from '../util';
 
 export default function SidePanel({ tab, onTab, toc, tocIndex, bookmarks, onTocSelect, onBookmarkSelect, onBookmarkRemove, onClose }) {
   const sorted = [...bookmarks].sort((a, b) => (a.progress ?? 0) - (b.progress ?? 0));
+  const sheetRef = useRef(null);
+  useDragToClose(sheetRef, onClose);
 
   return (
-    <nav className="sheet side-panel" aria-label="Contents and bookmarks">
-      <div className="sheet-head">
+    <nav ref={sheetRef} className="sheet side-panel" aria-label="Contents and bookmarks">
+      <div className="sheet-handle" data-drag-handle />
+      <div className="sheet-head" data-drag-handle>
         <div className="seg">
           <button className={tab === 'contents' ? 'active' : ''} onClick={() => onTab('contents')}>
             Contents

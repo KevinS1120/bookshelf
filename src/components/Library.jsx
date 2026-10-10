@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createBook } from '../library';
 import { importFile } from '../importBook';
 import { countLocalBooks, migrateLocalBooks } from '../migrate';
+import { useLongPress, usePullToRefresh } from '../native';
 import { STATUSES, dayKey, formatDuration, readingStreak, usePref } from '../util';
 import BookMenu from './BookMenu';
 import Cover from './Cover';
@@ -26,6 +27,7 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
   const [dragging, setDragging] = useState(false);
   const [localCount, setLocalCount] = useState(0);
   const inputRef = useRef(null);
+  const { pull, refreshing } = usePullToRefresh(onRefresh);
 
   useEffect(() => {
     countLocalBooks().then(setLocalCount);
@@ -129,6 +131,11 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
 
   return (
     <div className="library" {...dropHandlers}>
+      {(pull > 0 || refreshing) && (
+        <div className="ptr" style={{ transform: `translateY(${refreshing ? 56 : pull * 56}px)`, opacity: refreshing ? 1 : Math.min(1, pull) }}>
+          <span className={`ptr-spinner${refreshing || pull >= 1 ? ' spin' : ''}`} style={refreshing ? undefined : { transform: `rotate(${pull * 270}deg)` }} />
+        </div>
+      )}
       <header className="lib-header">
         <div className="brand">
           <span className="brand-mark">📚</span>
@@ -213,20 +220,7 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
               <h2 className="section-title">Continue reading</h2>
               <div className="continue-row">
                 {continueReading.map((b) => (
-                  <div key={b.id} className="continue-card">
-                    <button className="continue-main" onClick={() => actions.open(b)}>
-                      <Cover book={b} className="cover-sm" />
-                      <div className="continue-info">
-                        <strong className="clamp-2">{b.title}</strong>
-                        {b.author && <span className="muted clamp-1">{b.author}</span>}
-                        <div className="progress">
-                          <div style={{ width: `${Math.round(b.progress * 100)}%` }} />
-                        </div>
-                        <span className="muted small">{Math.round(b.progress * 100)}% · Resume ›</span>
-                      </div>
-                    </button>
-                    <BookMenu {...menuProps(b)} className="menu-btn-inline" />
-                  </div>
+                  <ContinueCard key={b.id} book={b} menuProps={menuProps(b)} onOpen={() => actions.open(b)} />
                 ))}
               </div>
             </section>
@@ -277,25 +271,7 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
           ) : (
             <div className="grid">
               {visible.map((b) => (
-                <div key={b.id} className="book-card">
-                  <button className="book-open" onClick={() => actions.details(b)} aria-label={b.title}>
-                    <div className="cover-wrap">
-                      <Cover book={b} />
-                      <span className="badge">{b.format.toUpperCase()}</span>
-                      {b.status === 'finished' && <span className="badge done">✓</span>}
-                      {b.status === 'paused' && <span className="badge paused">❚❚</span>}
-                      {(b.status === 'reading' || b.status === 'paused') && b.progress > 0 && (
-                        <div className="progress overlay">
-                          <div style={{ width: `${Math.round(b.progress * 100)}%` }} />
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                  <BookMenu {...menuProps(b)} className="menu-btn-cover" />
-                  <strong className="clamp-2">{b.title}</strong>
-                  {b.author && <span className="muted clamp-1">{b.author}</span>}
-                  {b.rating > 0 && <Stars value={b.rating} size="sm" />}
-                </div>
+                <BookCard key={b.id} book={b} menuProps={menuProps(b)} onSelect={() => actions.details(b)} />
               ))}
             </div>
           )}
@@ -307,6 +283,54 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
           <div>Drop to add to your shelf</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Tap for details; press and hold (or right-click) for the actions menu.
+function BookCard({ book: b, menuProps, onSelect }) {
+  const menu = useRef(null);
+  const press = useLongPress(() => menu.current?.open());
+  return (
+    <div className="book-card">
+      <button className="book-open" onClick={onSelect} aria-label={b.title} {...press}>
+        <div className="cover-wrap">
+          <Cover book={b} />
+          <span className="badge">{b.format.toUpperCase()}</span>
+          {b.status === 'finished' && <span className="badge done">✓</span>}
+          {b.status === 'paused' && <span className="badge paused">❚❚</span>}
+          {(b.status === 'reading' || b.status === 'paused') && b.progress > 0 && (
+            <div className="progress overlay">
+              <div style={{ width: `${Math.round(b.progress * 100)}%` }} />
+            </div>
+          )}
+        </div>
+      </button>
+      <BookMenu ref={menu} {...menuProps} className="menu-btn-cover" />
+      <strong className="clamp-2">{b.title}</strong>
+      {b.author && <span className="muted clamp-1">{b.author}</span>}
+      {b.rating > 0 && <Stars value={b.rating} size="sm" />}
+    </div>
+  );
+}
+
+function ContinueCard({ book: b, menuProps, onOpen }) {
+  const menu = useRef(null);
+  const press = useLongPress(() => menu.current?.open());
+  return (
+    <div className="continue-card">
+      <button className="continue-main" onClick={onOpen} {...press}>
+        <Cover book={b} className="cover-sm" />
+        <div className="continue-info">
+          <strong className="clamp-2">{b.title}</strong>
+          {b.author && <span className="muted clamp-1">{b.author}</span>}
+          <div className="progress">
+            <div style={{ width: `${Math.round(b.progress * 100)}%` }} />
+          </div>
+          <span className="muted small">{Math.round(b.progress * 100)}% · Resume ›</span>
+        </div>
+      </button>
+      <BookMenu ref={menu} {...menuProps} className="menu-btn-inline" />
     </div>
   );
 }

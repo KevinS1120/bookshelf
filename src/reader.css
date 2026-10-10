@@ -212,13 +212,49 @@ input[type='range'] {
   display: flex;
   background: var(--r-bg);
   -webkit-overflow-scrolling: touch;
+  /* We handle pinch-zoom on the page ourselves; scrolling stays native. */
+  touch-action: pan-x pan-y;
+}
+/* The current page, with the previous/next pages parked either side while swiping. */
+.pdf-track {
+  position: relative;
+  margin: auto;
+  min-width: 100%;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
 }
 .pdf-page {
-  margin: auto;
+  line-height: 0;
+  transform-origin: center;
+}
+.pdf-slot {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.pdf-track.swiping .pdf-slot {
+  display: flex;
+}
+.pdf-slot-prev {
+  right: calc(100% + 24px);
+}
+.pdf-slot-next {
+  left: calc(100% + 24px);
+}
+.pdf-sheet {
   line-height: 0;
   isolation: isolate;
+  background: var(--sheet-bg, transparent);
 }
-.pdf-page canvas {
+.pdf-sheet canvas {
   box-shadow: 0 2px 16px rgb(0 0 0 / 0.18);
   background: #fff;
 }

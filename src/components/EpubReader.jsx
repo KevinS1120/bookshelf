@@ -53,19 +53,19 @@ export default function EpubReader({
   onRelocate,
   onToc,
   onTap,
-  onSwipe,
   onKey,
   onError,
   onScrubbable,
 }) {
   const viewerRef = useRef(null);
   const renditionRef = useRef(null);
+  const turnRef = useRef(null);
   const bookRef = useRef(null);
   const tocRef = useRef([]);
   const lastRef = useRef({ cfi: initialLocation || null, end: null, atEnd: false, href: '' });
   const [book, setBook] = useState(null);
   const live = useRef({});
-  live.current = { settings, onRelocate, onToc, onTap, onSwipe, onKey, onError, onScrubbable };
+  live.current = { settings, onRelocate, onToc, onTap, onKey, onError, onScrubbable };
 
   const report = useCallback(() => {
     const b = bookRef.current;
@@ -159,19 +159,70 @@ export default function EpubReader({
       const vr = viewer.getBoundingClientRect();
       live.current.onTap((x - vr.left) / vr.width);
     });
-    let touch = null;
+    // Drag to turn: the page follows your finger. Within a chapter the pages sit
+    // side by side in a scrolling container, so dragging scrolls it directly;
+    // epub.js notices the scroll and updates the position.
+    let drag = null;
+    const container = () => rendition.manager?.container;
     rendition.on('touchstart', (e) => {
-      const t = e.changedTouches?.[0];
-      touch = t && e.touches.length === 1 ? { x: t.screenX, y: t.screenY } : null;
+      const t = e.touches?.[0];
+      const c = container();
+      drag = !scroll && c && t && e.touches.length === 1 ? { x: t.screenX, y: t.screenY, t: Date.now(), start: c.scrollLeft, mode: null, dx: 0 } : null;
     });
-    rendition.on('touchend', (e) => {
-      const t = e.changedTouches?.[0];
-      if (!touch || !t || scroll) return;
-      const dx = t.screenX - touch.x;
-      const dy = t.screenY - touch.y;
-      touch = null;
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) live.current.onSwipe(dx < 0 ? 'next' : 'prev');
+    rendition.on('touchmove', (e) => {
+      const c = container();
+      const t = e.touches?.[0];
+      if (!drag || !c || !t || e.touches.length !== 1) return;
+      const dx = t.screenX - drag.x;
+      const dy = t.screenY - drag.y;
+      if (!drag.mode) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        drag.mode = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'swipe' : 'none';
+        if (drag.mode === 'swipe') c.style.scrollBehavior = 'auto';
+      }
+      if (drag.mode !== 'swipe') return;
+      drag.dx = dx;
+      const max = c.scrollWidth - c.clientWidth;
+      const target = drag.start - dx;
+      c.scrollLeft = Math.min(max, Math.max(0, target));
+      // Past the first/last page of the chapter: stretch a little.
+      const over = target < 0 ? -target : target > max ? max - target : 0;
+      c.style.transform = over ? `translateX(${over * 0.3}px)` : '';
     });
+    rendition.on('touchend', () => {
+      const c = container();
+      if (!drag || !c) return;
+      const { mode, dx, start, t } = drag;
+      drag = null;
+      if (mode !== 'swipe') return;
+      c.style.transition = 'transform 0.2s ease-out';
+      c.style.transform = '';
+      setTimeout(() => {
+        c.style.transition = '';
+      }, 220);
+      const v = dx / Math.max(1, Date.now() - t);
+      const commit = Math.abs(dx) > c.clientWidth * 0.2 || (Math.abs(v) > 0.35 && Math.abs(dx) > 25);
+      if (commit) turn(dx < 0 ? 1 : -1, start);
+      else c.scrollTo({ left: start, behavior: 'smooth' });
+    });
+
+    // Animated page turn (buttons, keys, taps, swipes).
+    function turn(dir, start = container()?.scrollLeft ?? 0) {
+      const c = container();
+      if (!c || scroll) return dir > 0 ? rendition.next() : rendition.prev();
+      const delta = rendition.manager.layout?.delta || c.clientWidth;
+      const max = c.scrollWidth - c.clientWidth;
+      const target = start + dir * delta;
+      if (target >= -1 && target <= max + 1) {
+        c.scrollTo({ left: target, behavior: 'smooth' });
+      } else {
+        // Into the next/previous chapter: let epub.js load it.
+        c.scrollLeft = start;
+        if (dir > 0) rendition.next();
+        else rendition.prev();
+      }
+    }
+    turnRef.current = turn;
 
     displayAt(rendition, lastRef.current.cfi)
       .catch(() => alive && rendition.display())
@@ -184,6 +235,7 @@ export default function EpubReader({
     return () => {
       alive = false;
       renditionRef.current = null;
+      turnRef.current = null;
       try {
         rendition.destroy();
       } catch {
@@ -230,8 +282,8 @@ export default function EpubReader({
   useImperativeHandle(
     ref,
     () => ({
-      next: () => renditionRef.current?.next(),
-      prev: () => renditionRef.current?.prev(),
+      next: () => renditionRef.current && turnRef.current?.(1),
+      prev: () => renditionRef.current && turnRef.current?.(-1),
       goTo: (cfi) => renditionRef.current && displayAt(renditionRef.current, cfi).catch(() => {}),
       goToFraction: (f) => {
         const b = bookRef.current;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as library from '../library';
+import { useBackClose, useWakeLock } from '../native';
 import { chromeVars, useReaderSettings } from '../settings';
 import { dayKey, uid } from '../util';
 import EpubReader from './EpubReader';
@@ -104,7 +105,12 @@ export default function Reader({ book, onUpdate, onClose }) {
     [book.format],
   );
 
-  const handleSwipe = useCallback((dir) => (dir === 'next' ? viewRef.current?.next() : viewRef.current?.prev()), []);
+  // Back button/gesture closes an open panel first, then the book.
+  useBackClose(onClose);
+  useBackClose(() => setPanel(null), !!panel);
+  useWakeLock();
+
+  const handleZoom = useCallback((pdfZoom) => updateSettings({ pdfZoom }), [updateSettings]);
 
   const handleKey = useCallback((e) => {
     if (e.target?.closest?.('input, textarea, select')) return;
@@ -171,7 +177,7 @@ export default function Reader({ book, onUpdate, onClose }) {
     onRelocate: handleRelocate,
     onToc: setToc,
     onTap: handleTap,
-    onSwipe: handleSwipe,
+    onZoom: handleZoom,
     onKey: handleKey,
     onError: setError,
     onScrubbable: setCanScrub,

@@ -4,6 +4,7 @@ import App from './App.jsx';
 import './styles.css';
 import './reader.css';
 import './features.css';
+import './native.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
