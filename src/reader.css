@@ -78,6 +78,10 @@
 
 .reader-bar,
 .reader-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -85,25 +89,29 @@
   padding-left: max(10px, env(safe-area-inset-left));
   padding-right: max(10px, env(safe-area-inset-right));
   background: var(--r-bar);
-  flex-shrink: 0;
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.18s;
 }
 .reader-bar {
+  top: 0;
   border-bottom: 1px solid var(--r-border);
   padding-top: calc(6px + env(safe-area-inset-top));
 }
 .reader-footer {
+  bottom: 0;
   border-top: 1px solid var(--r-border);
   padding-bottom: calc(6px + env(safe-area-inset-bottom));
   gap: 4px;
 }
-.chrome-hidden .reader-bar,
-.chrome-hidden .reader-footer,
-.chrome-hidden .reader-progress {
-  display: none;
+/* Full screen: the toolbars slide away; the page itself doesn't change size. */
+.chrome-hidden .reader-bar {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
 }
-.chrome-hidden .reader-stage {
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+.chrome-hidden .reader-footer {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .back {
@@ -142,9 +150,12 @@
 }
 
 .reader-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
   height: 2px;
   background: var(--r-border);
-  flex-shrink: 0;
 }
 .reader-progress div {
   height: 100%;
@@ -153,9 +164,11 @@
 }
 
 .reader-stage {
-  flex: 1;
-  min-height: 0;
-  position: relative;
+  position: absolute;
+  inset: 0;
+  /* Room for the floating toolbars, kept even in full screen. */
+  padding-top: var(--chrome-top, 56px);
+  padding-bottom: var(--chrome-bottom, 64px);
   display: flex;
   background: var(--r-page);
 }
@@ -289,8 +302,8 @@ input[type='range'] {
 .sheet {
   position: absolute;
   z-index: 5;
-  top: 8px;
-  bottom: 8px;
+  top: calc(var(--chrome-top, 56px) + 8px);
+  bottom: calc(var(--chrome-bottom, 64px) + 8px);
   width: min(360px, calc(100% - 16px));
   display: flex;
   flex-direction: column;
@@ -305,7 +318,7 @@ input[type='range'] {
 .settings-sheet {
   right: 8px;
   bottom: auto;
-  max-height: calc(100% - 16px);
+  max-height: calc(100% - var(--chrome-top, 56px) - var(--chrome-bottom, 64px) - 16px);
 }
 .side-panel {
   left: 8px;
@@ -540,7 +553,7 @@ button.list-item:hover {
 .banner {
   position: absolute;
   left: 50%;
-  bottom: 16px;
+  bottom: calc(var(--chrome-bottom, 64px) + 12px);
   transform: translateX(-50%);
   z-index: 4;
   display: flex;

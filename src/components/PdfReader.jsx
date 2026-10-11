@@ -248,8 +248,6 @@ export default function PdfReader({
     const stage = stageRef.current;
     const track = trackRef.current;
     let g = null; // current gesture
-    let lastTap = 0;
-    let tapTimer = null;
 
     const zoomedIn = () => stage.scrollWidth > stage.clientWidth + 2;
     const syncTouchAction = () => {
@@ -278,23 +276,11 @@ export default function PdfReader({
       }, 230);
     };
 
+    // Taps: left third back, right third forward, middle shows/hides the toolbars.
+    // (No double-tap zoom: two quick taps to toggle the toolbars kept zooming in.)
     const handleTap = (x) => {
       const r = stage.getBoundingClientRect();
-      const frac = (x - r.left) / r.width;
-      // Double-tap in the middle zooms in/out; a single tap there waits a moment to see.
-      if (frac > 0.3 && frac < 0.7) {
-        const now = Date.now();
-        if (now - lastTap < 300) {
-          clearTimeout(tapTimer);
-          lastTap = 0;
-          live.current.onZoom(live.current.settings.pdfZoom > 1.05 ? 1 : 2);
-          return;
-        }
-        lastTap = now;
-        tapTimer = setTimeout(() => live.current.onTap(frac), 260);
-      } else {
-        live.current.onTap(frac);
-      }
+      live.current.onTap((x - r.left) / r.width);
     };
 
     // --- shared one-finger logic ---
@@ -415,7 +401,6 @@ export default function PdfReader({
     stage.addEventListener('dragstart', prevent);
     stage.addEventListener('contextmenu', prevent);
     return () => {
-      clearTimeout(tapTimer);
       ro.disconnect();
       stage.removeEventListener('touchstart', touchStart);
       stage.removeEventListener('touchmove', touchMove);

@@ -62,6 +62,8 @@ export default function EpubReader({
   const renditionRef = useRef(null);
   const turnRef = useRef(null);
   const layerRef = useRef(null);
+  const settleRef = useRef(null);
+  const draggingRef = useRef(false); // a finger is dragging the page
   const bookRef = useRef(null);
   const tocRef = useRef([]);
   const lastRef = useRef({ cfi: initialLocation || null, end: null, atEnd: false, href: '' });
@@ -129,23 +131,73 @@ export default function EpubReader({
     };
   }, [bookId, getFile, report]);
 
+  // Wait until the reading area has a real size before laying out the book
+  // (epub.js can't recover from starting at 0×0, e.g. in a hidden window).
+  const [hasSize, setHasSize] = useState(false);
+  useEffect(() => {
+    const v = viewerRef.current;
+    if (!v) return;
+    const check = () => {
+      if (v.clientWidth > 50 && v.clientHeight > 50) {
+        setHasSize(true);
+        ro.disconnect();
+        return true;
+      }
+      return false;
+    };
+    const ro = new ResizeObserver(check);
+    if (!check()) ro.observe(v);
+    return () => ro.disconnect();
+  }, []);
+
   // The rendition is rebuilt when the layout (paged / single / scroll) changes.
   const scroll = settings.layout === 'scroll';
   useEffect(() => {
-    if (!book) return;
+    if (!book || !hasSize) return;
     let alive = true;
-    const rendition = book.renderTo(viewerRef.current, {
-      width: '100%',
-      height: '100%',
+    const viewer = viewerRef.current;
+    // The reading area in pixels. A fixed size means epub.js doesn't react to
+    // window resizes on its own; we re-lay out once, at a known position (below).
+    const box = () => {
+      const cs = getComputedStyle(viewer);
+      return {
+        w: Math.floor(viewer.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)),
+        h: Math.floor(viewer.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)),
+      };
+    };
+    let size = box();
+    const rendition = book.renderTo(viewer, {
+      width: size.w,
+      height: size.h,
       flow: scroll ? 'scrolled' : 'paginated',
       manager: scroll ? 'continuous' : 'default',
       spread: settings.layout === 'single' ? 'none' : 'auto',
       minSpreadWidth: 900,
       allowScriptedContent: false,
+      resizeOnOrientationChange: false,
     });
     rendition.hooks.content.register((contents) => applyStyles(contents, epubCss(live.current.settings)));
 
+    // While epub.js re-lays out the page it reports in-between positions (often
+    // the start of the chapter). Ignore those, then record where we really are.
+    let settling = true;
+    const settle = async (work) => {
+      settling = true;
+      try {
+        await work();
+      } finally {
+        const loc = await Promise.resolve(rendition.currentLocation()).catch(() => null);
+        if (alive && loc?.start?.cfi) {
+          lastRef.current = { cfi: loc.start.cfi, end: loc.end?.cfi ?? null, atEnd: !!loc.atEnd, href: loc.start.href };
+        }
+        settling = false;
+        if (alive) report();
+      }
+    };
+    settleRef.current = settle;
+
     rendition.on('relocated', (loc) => {
+      if (settling) return;
       lastRef.current = { cfi: loc.start.cfi, end: loc.end?.cfi ?? null, atEnd: !!loc.atEnd, href: loc.start.href };
       report();
     });
@@ -166,16 +218,25 @@ export default function EpubReader({
       });
     }
 
-    // Animated page turn (buttons, keys, taps, swipes).
-    function turn(dir, start = container()?.scrollLeft ?? 0) {
+    // Animated page turn (buttons, keys, taps, swipes). Turns count in whole
+    // pages: a turn during another turn's animation continues from where that
+    // one is heading, so quick taps never leave the page part-way.
+    let heading = null; // scroll position an animation is heading to
+    let headingTimer = null;
+    function turn(dir, start) {
       const c = container();
       if (!c || scroll) return dir > 0 ? rendition.next() : rendition.prev();
       const delta = rendition.manager.layout?.delta || c.clientWidth;
       const max = c.scrollWidth - c.clientWidth;
-      const target = start + dir * delta;
+      const from = heading ?? Math.round((start ?? c.scrollLeft) / delta) * delta;
+      const target = from + dir * delta;
       if (target >= -1 && target <= max + 1) {
+        heading = target;
+        clearTimeout(headingTimer);
+        headingTimer = setTimeout(() => (heading = null), 700);
         c.scrollTo({ left: target, behavior: 'smooth' });
       } else {
+        heading = null;
         // Into the next/previous chapter: let epub.js load it.
         c.scrollLeft = start;
         if (dir > 0) rendition.next();
@@ -184,25 +245,70 @@ export default function EpubReader({
     }
     turnRef.current = turn;
 
-    displayAt(rendition, lastRef.current.cfi)
-      .catch(() => alive && rendition.display())
+    // Pages should always come to rest exactly on a page, never part-way.
+    let snapTimer = null;
+    const snap = () => {
+      clearTimeout(snapTimer);
+      snapTimer = setTimeout(() => {
+        const c = container();
+        if (!c || scroll || settling || draggingRef.current) return;
+        const delta = rendition.manager?.layout?.delta;
+        if (!delta) return;
+        const off = c.scrollLeft % delta;
+        if (off > 2 && delta - off > 2) c.scrollTo({ left: Math.round(c.scrollLeft / delta) * delta, behavior: 'smooth' });
+      }, 200);
+    };
+
+    // Re-lay out when the reading area really changes size (rotation, margins,
+    // page width), returning to the exact position we were at.
+    let resizeTimer = null;
+    const ro = new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const next = box();
+        if (!renditionRef.current || (Math.abs(next.w - size.w) < 2 && Math.abs(next.h - size.h) < 2)) return;
+        size = next;
+        const cfi = lastRef.current.cfi;
+        settle(async () => {
+          rendition.resize(next.w, next.h, cfi); // epub.js re-displays this position when done
+          await new Promise((resolve) => {
+            const t = setTimeout(resolve, 2000);
+            rendition.once('displayed', () => {
+              clearTimeout(t);
+              setTimeout(resolve, 50);
+            });
+          });
+          await displayAt(rendition, cfi).catch(() => {}); // land exactly (handles page boundaries)
+        });
+      }, 200);
+    });
+
+    settle(() => displayAt(rendition, lastRef.current.cfi).catch(() => alive && rendition.display()))
       .then(() => {
+        if (!alive) return;
         // Only expose the rendition once it can actually turn pages.
-        if (alive) renditionRef.current = rendition;
+        renditionRef.current = rendition;
+        container()?.addEventListener('scroll', snap, { passive: true });
+        ro.observe(viewer);
       })
       .catch(() => {});
 
     return () => {
       alive = false;
+      clearTimeout(snapTimer);
+      clearTimeout(resizeTimer);
+      ro.disconnect();
+      container()?.removeEventListener('scroll', snap);
       renditionRef.current = null;
       turnRef.current = null;
+      settleRef.current = null;
       try {
         rendition.destroy();
       } catch {
         /* destroyed along with the book */
       }
     };
-  }, [book, settings.layout, scroll, report]);
+  }, [book, hasSize, settings.layout, scroll, report]);
 
   // ---------- gestures ----------
   // An invisible layer over the page catches taps and swipes in this document,
@@ -249,7 +355,10 @@ export default function EpubReader({
         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return false;
         drag.mode = Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'none';
         debugGesture('mode', { mode: drag.mode, dx: Math.round(dx), dy: Math.round(dy) });
-        if (drag.mode === 'swipe') c.style.scrollBehavior = 'auto';
+        if (drag.mode === 'swipe') {
+          c.style.scrollBehavior = 'auto';
+          draggingRef.current = true;
+        }
       }
       if (drag.mode !== 'swipe') return false;
       drag.dx = dx;
@@ -265,6 +374,7 @@ export default function EpubReader({
       const c = container();
       const d = drag;
       drag = null;
+      draggingRef.current = false;
       if (!d || !c) return;
       debugGesture('end', { mode: d.mode, dx: Math.round(d.dx), cancelled, scrollLeft: c.scrollLeft });
       if (d.mode === null && !cancelled) return tap(x, y);
@@ -346,26 +456,16 @@ export default function EpubReader({
     if (!r) return;
     const timer = setTimeout(() => {
       const css = epubCss(live.current.settings);
-      r.getContents().forEach((c) => applyStyles(c, css));
-      r.clear();
-      displayAt(r, lastRef.current.cfi).catch(() => {});
+      const cfi = lastRef.current.cfi;
+      const relayout = async () => {
+        r.getContents().forEach((c) => applyStyles(c, css));
+        r.clear();
+        await displayAt(r, cfi).catch(() => {});
+      };
+      (settleRef.current ?? ((fn) => fn()))(relayout);
     }, 250);
     return () => clearTimeout(timer);
   }, [typeKey]);
-
-  // Margins and page width change the viewer's size; epub.js needs to re-measure.
-  useEffect(() => {
-    let timer;
-    const ro = new ResizeObserver(() => {
-      clearTimeout(timer);
-      timer = setTimeout(() => renditionRef.current?.resize(), 150);
-    });
-    ro.observe(viewerRef.current);
-    return () => {
-      ro.disconnect();
-      clearTimeout(timer);
-    };
-  }, []);
 
   useImperativeHandle(
     ref,

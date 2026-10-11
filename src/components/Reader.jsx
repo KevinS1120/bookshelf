@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as library from '../library';
 import { useBackClose, useGestureDebug, useWakeLock } from '../native';
 import { chromeVars, useReaderSettings } from '../settings';
@@ -111,6 +111,25 @@ export default function Reader({ book, onUpdate, onClose }) {
   useWakeLock();
   const debugLines = useGestureDebug();
 
+  // The toolbars float over the page and slide away in full screen, so showing
+  // or hiding them never resizes the page (which would make the book re-flow).
+  // The page keeps room for them at the top and bottom.
+  const barRef = useRef(null);
+  const footRef = useRef(null);
+  const [chromeSize, setChromeSize] = useState({ top: 56, bottom: 64 });
+  useLayoutEffect(() => {
+    const measure = () => {
+      const top = barRef.current?.offsetHeight ?? 56;
+      const bottom = footRef.current?.offsetHeight ?? 64;
+      setChromeSize((c) => (c.top === top && c.bottom === bottom ? c : { top, bottom }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (barRef.current) ro.observe(barRef.current);
+    if (footRef.current) ro.observe(footRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   const handleZoom = useCallback((pdfZoom) => updateSettings({ pdfZoom }), [updateSettings]);
 
   const handleKey = useCallback((e) => {
@@ -185,8 +204,11 @@ export default function Reader({ book, onUpdate, onClose }) {
   };
 
   return (
-    <div className={`reader${chrome ? '' : ' chrome-hidden'}`} style={chromeVars(settings)}>
-      <header className="reader-bar">
+    <div
+      className={`reader${chrome ? '' : ' chrome-hidden'}`}
+      style={{ ...chromeVars(settings), '--chrome-top': `${chromeSize.top}px`, '--chrome-bottom': `${chromeSize.bottom}px` }}
+    >
+      <header className="reader-bar" ref={barRef}>
         <button className="btn ghost back" onClick={onClose} aria-label="Back to library">
           <ChevronLeft />
           <span className="hide-sm">Library</span>
@@ -222,10 +244,10 @@ export default function Reader({ book, onUpdate, onClose }) {
             <TextIcon />
           </button>
         </div>
+        <div className="reader-progress">
+          <div style={{ width: `${pct}%` }} />
+        </div>
       </header>
-      <div className="reader-progress">
-        <div style={{ width: `${pct}%` }} />
-      </div>
 
       <div className="reader-stage">
         {error ? (
@@ -237,6 +259,11 @@ export default function Reader({ book, onUpdate, onClose }) {
         )}
 
         {settings.dim > 0 && <div className="dimmer" style={{ opacity: settings.dim / 100 }} />}
+        {book.format === 'pdf' && Math.abs(settings.pdfZoom - 1) > 0.02 && (
+          <button className="fit-btn" onClick={() => updateSettings({ pdfZoom: 1 })}>
+            Fit page
+          </button>
+        )}
         {debugLines.length > 0 && <pre className="touch-test">{debugLines.join(String.fromCharCode(10))}</pre>}
 
         {(panel === 'contents' || panel === 'bookmarks') && (
@@ -318,7 +345,7 @@ export default function Reader({ book, onUpdate, onClose }) {
         )}
       </div>
 
-      <footer className="reader-footer">
+      <footer className="reader-footer" ref={footRef}>
         <button className="icon-btn" onClick={() => viewRef.current?.prev()} aria-label="Previous page">
           <ChevronLeft />
         </button>
