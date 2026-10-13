@@ -418,7 +418,7 @@ export default function PdfReader({
   }, [size, renderKey]);
 
   const colors = themeColors(settings);
-  const recolor = settings.pdfRecolor && settings.theme !== 'light';
+  const recolor = settings.pdfRecolor;
 
   return (
     <div className="pdf-stage" ref={stageRef}>

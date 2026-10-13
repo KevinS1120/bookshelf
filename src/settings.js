@@ -2,13 +2,10 @@
 // usually want different text sizes), in localStorage.
 import { usePref } from './util';
 
+// Dark page themes only (the first is the fallback for removed light themes).
 export const THEMES = [
-  { id: 'light', label: 'Light', bg: '#ffffff', fg: '#1f1f1f', link: '#1a5fb4' },
-  { id: 'sepia', label: 'Sepia', bg: '#f4ecd8', fg: '#433422', link: '#8a5a1f' },
-  { id: 'sage', label: 'Sage', bg: '#e3eadd', fg: '#2c3a2a', link: '#3b6b35' },
-  { id: 'forest', label: 'Forest', bg: '#10271d', fg: '#dfe8dc', link: '#e0bb6a' },
   { id: 'library', label: 'Library', bg: '#1c1510', fg: '#e6d9bf', link: '#d4ae66' },
-  { id: 'parchment', label: 'Parchment', bg: '#f1e6cc', fg: '#2e2418', link: '#7c2d2d' },
+  { id: 'forest', label: 'Forest', bg: '#10271d', fg: '#dfe8dc', link: '#e0bb6a' },
   { id: 'dark', label: 'Dark', bg: '#1c1c1e', fg: '#d6d3cd', link: '#8ab4f8' },
   { id: 'black', label: 'Black', bg: '#000000', fg: '#bdbab4', link: '#8ab4f8' },
   { id: 'custom', label: 'Custom' },
@@ -36,8 +33,8 @@ export const PAGE_WIDTH_MAX = 1600; // slider maximum, meaning "no limit"
 
 export const DEFAULT_SETTINGS = {
   theme: 'library',
-  customBg: '#fdf6e3',
-  customFg: '#2b2b2b',
+  customBg: '#2a2320',
+  customFg: '#e8dcc4',
   textColor: null, // overrides the theme's text color (EPUB)
   font: 'publisher',
   fontSize: 100,
@@ -55,6 +52,8 @@ export const DEFAULT_SETTINGS = {
 export function useReaderSettings() {
   const [stored, setStored] = usePref('reader-settings', DEFAULT_SETTINGS);
   const settings = { ...DEFAULT_SETTINGS, ...stored };
+  // Themes that no longer exist (the old light ones) become the default.
+  if (!THEMES.some((t) => t.id === settings.theme)) settings.theme = DEFAULT_SETTINGS.theme;
   const update = (patch) => setStored((s) => ({ ...DEFAULT_SETTINGS, ...s, ...patch }));
   const reset = () => setStored(DEFAULT_SETTINGS);
   return [settings, update, reset];
@@ -82,17 +81,17 @@ export function themeColors(s) {
 }
 
 // Ready-made text colors that read well on light or dark pages.
+// Text colors for dark pages, clearly different from each other.
 export const TEXT_COLORS = [
-  { color: '#111111', label: 'Black' },
-  { color: '#3d3d3d', label: 'Charcoal' },
-  { color: '#5b4636', label: 'Brown' },
-  { color: '#1f3a5f', label: 'Navy' },
   { color: '#ffffff', label: 'White' },
-  { color: '#e8e2d0', label: 'Cream' },
-  { color: '#c9c4ba', label: 'Soft gray' },
-  { color: '#e6c27a', label: 'Gold' },
-  { color: '#b9e0c2', label: 'Mint' },
-  { color: '#b8d4f0', label: 'Sky' },
+  { color: '#f3e2b8', label: 'Parchment' },
+  { color: '#a9a39a', label: 'Dim gray' },
+  { color: '#e3b65c', label: 'Gold' },
+  { color: '#f0a35e', label: 'Amber' },
+  { color: '#e8a0a0', label: 'Rose' },
+  { color: '#9fd9a8', label: 'Mint' },
+  { color: '#8fc4f2', label: 'Sky' },
+  { color: '#c3b0f0', label: 'Lavender' },
 ];
 
 // WCAG contrast ratio between two colors (1 to 21).
@@ -104,14 +103,13 @@ export function contrast(a, b) {
 // CSS injected into each EPUB chapter.
 export function epubCss(s) {
   const c = themeColors(s);
-  const recolor = s.theme !== 'light' || !!s.textColor;
-  let css = `html, body { background: ${c.bg} !important; ${recolor ? `color: ${c.fg} !important;` : ''} }\n`;
+  // All themes are dark, so the book's own text colors are always replaced.
+  // ":not(#_)" adds weight, so this also beats books that style text very specifically.
+  let css = `html, body { background: ${c.bg} !important; color: ${c.fg} !important; }\n`;
   // Sideways drags turn pages (handled by the app); the browser only scrolls up/down.
   css += 'html, body { touch-action: pan-y; overscroll-behavior: none; }\n';
-  if (recolor) {
-    css += `body * { color: inherit !important; background-color: transparent !important; }
-      a, a * { color: ${c.link} !important; }\n`;
-  }
+  css += `html body *:not(#_) { color: ${c.fg} !important; -webkit-text-fill-color: ${c.fg} !important; background-color: transparent !important; }
+    html body a:not(#_), html body a *:not(#_) { color: ${c.link} !important; -webkit-text-fill-color: ${c.link} !important; }\n`;
   if (c.dark) css += 'img, svg { filter: brightness(0.85); }\n';
   if (s.fontSize !== 100) css += `body { font-size: ${s.fontSize}% !important; }
 `;
@@ -131,7 +129,8 @@ export function epubCss(s) {
 
 // CSS variables for the reader's own toolbars and background, derived from the page colors.
 export function chromeVars(s) {
-  const { bg, fg } = themeColors(s);
+  // The toolbars keep the theme's own text color; your text color is for the book.
+  const { bg, fg } = themeColors({ ...s, textColor: null });
   return {
     '--r-page': bg,
     '--r-fg': fg,

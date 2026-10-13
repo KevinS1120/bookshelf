@@ -79,14 +79,6 @@ button {
   letter-spacing: 0.03em;
   color: var(--text);
 }
-.brand h1::after {
-  content: 'ex libris';
-  display: block;
-  margin-top: 2px;
-  font: italic 13px/1 var(--body-serif);
-  letter-spacing: 0.18em;
-  color: var(--muted);
-}
 .search {
   background: rgb(0 0 0 / 0.25);
   border: 1px solid var(--border);
