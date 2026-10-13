@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'forest',
   customBg: '#fdf6e3',
   customFg: '#2b2b2b',
+  textColor: null, // overrides the theme's text color (EPUB)
   font: 'publisher',
   fontSize: 100,
   lineHeight: 'publisher',
@@ -66,18 +67,41 @@ function luminance(hex) {
 }
 
 export function themeColors(s) {
+  let c;
   if (s.theme === 'custom') {
     const dark = luminance(s.customBg) < 0.25;
-    return { bg: s.customBg, fg: s.customFg, link: dark ? '#8ab4f8' : '#1a5fb4', dark };
+    c = { bg: s.customBg, fg: s.customFg, link: dark ? '#8ab4f8' : '#1a5fb4', dark };
+  } else {
+    const t = THEMES.find((x) => x.id === s.theme) ?? THEMES[0];
+    c = { bg: t.bg, fg: t.fg, link: t.link, dark: luminance(t.bg) < 0.25 };
   }
-  const t = THEMES.find((x) => x.id === s.theme) ?? THEMES[0];
-  return { bg: t.bg, fg: t.fg, link: t.link, dark: luminance(t.bg) < 0.25 };
+  return s.textColor ? { ...c, fg: s.textColor } : c;
+}
+
+// Ready-made text colors that read well on light or dark pages.
+export const TEXT_COLORS = [
+  { color: '#111111', label: 'Black' },
+  { color: '#3d3d3d', label: 'Charcoal' },
+  { color: '#5b4636', label: 'Brown' },
+  { color: '#1f3a5f', label: 'Navy' },
+  { color: '#ffffff', label: 'White' },
+  { color: '#e8e2d0', label: 'Cream' },
+  { color: '#c9c4ba', label: 'Soft gray' },
+  { color: '#e6c27a', label: 'Gold' },
+  { color: '#b9e0c2', label: 'Mint' },
+  { color: '#b8d4f0', label: 'Sky' },
+];
+
+// WCAG contrast ratio between two colors (1 to 21).
+export function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
 }
 
 // CSS injected into each EPUB chapter.
 export function epubCss(s) {
   const c = themeColors(s);
-  const recolor = s.theme !== 'light';
+  const recolor = s.theme !== 'light' || !!s.textColor;
   let css = `html, body { background: ${c.bg} !important; ${recolor ? `color: ${c.fg} !important;` : ''} }\n`;
   // Sideways drags turn pages (handled by the app); the browser only scrolls up/down.
   css += 'html, body { touch-action: pan-y; overscroll-behavior: none; }\n';

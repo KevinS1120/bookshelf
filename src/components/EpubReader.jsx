@@ -443,7 +443,7 @@ export default function EpubReader({
   }, [scroll, book]);
 
   // Colors can be swapped in place.
-  const colorKey = `${settings.theme}|${settings.customBg}|${settings.customFg}`;
+  const colorKey = `${settings.theme}|${settings.customBg}|${settings.customFg}|${settings.textColor}`;
   useEffect(() => {
     const css = epubCss(live.current.settings);
     renditionRef.current?.getContents().forEach((c) => applyStyles(c, css));

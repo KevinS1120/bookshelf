@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useDragToClose } from '../native';
-import { FONTS, LINE_HEIGHTS, PAGE_WIDTH_MAX, THEMES } from '../settings';
+import { FONTS, LINE_HEIGHTS, PAGE_WIDTH_MAX, TEXT_COLORS, THEMES, contrast, themeColors } from '../settings';
 
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 
@@ -46,7 +46,7 @@ export default function ReaderSettings({ settings: s, onChange, onReset, format,
           <div className="theme-grid">
             {THEMES.map((t) => {
               const bg = t.id === 'custom' ? s.customBg : t.bg;
-              const fg = t.id === 'custom' ? s.customFg : t.fg;
+              const fg = s.textColor || (t.id === 'custom' ? s.customFg : t.fg);
               return (
                 <button
                   key={t.id}
@@ -64,15 +64,17 @@ export default function ReaderSettings({ settings: s, onChange, onReset, format,
             <div className="color-row">
               <label>
                 <input type="color" value={s.customBg} onChange={(e) => onChange({ customBg: e.target.value })} />
-                Page
-              </label>
-              <label>
-                <input type="color" value={s.customFg} onChange={(e) => onChange({ customFg: e.target.value })} />
-                Text
+                Page color
               </label>
             </div>
           )}
         </Row>
+
+        {epub && (
+          <Row label="Text color" value={s.textColor ? null : 'Auto'}>
+            <TextColor settings={s} onChange={onChange} />
+          </Row>
+        )}
 
         <Row label="Brightness" value={`${100 - s.dim}%`}>
           <input
@@ -224,5 +226,54 @@ export default function ReaderSettings({ settings: s, onChange, onReset, format,
         </div>
       </div>
     </div>
+  );
+}
+
+function TextColor({ settings: s, onChange }) {
+  const themeText = themeColors({ ...s, textColor: null }).fg;
+  const page = themeColors(s).bg;
+  const custom = s.textColor && !TEXT_COLORS.some((c) => c.color === s.textColor);
+  return (
+    <>
+      <div className="text-colors" role="radiogroup" aria-label="Text color">
+        <button
+          role="radio"
+          aria-checked={!s.textColor}
+          className={`text-color auto${!s.textColor ? ' active' : ''}`}
+          style={{ background: page, color: themeText }}
+          onClick={() => onChange({ textColor: null })}
+          title="Use the theme's text color"
+        >
+          Aa
+        </button>
+        {TEXT_COLORS.map((c) => (
+          <button
+            key={c.color}
+            role="radio"
+            aria-checked={s.textColor === c.color}
+            aria-label={c.label}
+            title={c.label}
+            className={`text-color${s.textColor === c.color ? ' active' : ''}`}
+            style={{ background: c.color }}
+            onClick={() => onChange({ textColor: c.color })}
+          />
+        ))}
+        <label
+          className={`text-color custom${custom ? ' active' : ''}`}
+          style={custom ? { background: s.textColor } : undefined}
+          title="Pick any color"
+        >
+          <input
+            type="color"
+            value={s.textColor || themeText}
+            onChange={(e) => onChange({ textColor: e.target.value })}
+            aria-label="Pick any text color"
+          />
+        </label>
+      </div>
+      {s.textColor && contrast(s.textColor, page) < 3 && (
+        <p className="set-hint warn">This color is hard to read on this page color.</p>
+      )}
+    </>
   );
 }
