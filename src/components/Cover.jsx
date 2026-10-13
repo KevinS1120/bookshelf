@@ -22,15 +22,27 @@ function useCover(book) {
   return url;
 }
 
+// hue, saturation, lightness: oxblood, cognac, forest, navy, plum, ochre, slate
+const BINDINGS = [
+  [2, 45, 26],
+  [24, 45, 26],
+  [150, 28, 20],
+  [215, 35, 22],
+  [320, 22, 22],
+  [38, 50, 28],
+  [200, 12, 24],
+];
+
 export default function Cover({ book, className = '' }) {
   const url = useCover(book);
   if (url) return <img className={`cover ${className}`} src={url} alt="" draggable={false} />;
 
-  const hue = hueFor(book.title || book.fileName);
+  // Books without a cover look leather-bound, in classic binding colors.
+  const [h, sat, light] = BINDINGS[hueFor(book.title || book.fileName) % BINDINGS.length];
   return (
     <div
       className={`cover cover-placeholder ${className}`}
-      style={{ background: `linear-gradient(160deg, hsl(${hue} 38% 34%), hsl(${(hue + 40) % 360} 42% 20%))` }}
+      style={{ background: `linear-gradient(160deg, hsl(${h} ${sat}% ${light + 8}%), hsl(${h} ${sat}% ${light - 6}%))` }}
     >
       <span className="cover-title">{book.title}</span>
       {book.author && <span className="cover-author">{book.author}</span>}

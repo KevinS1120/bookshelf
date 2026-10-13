@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useBackClose, useDragToClose } from '../native';
 import { STATUSES, formatDate, formatSize, fromDateInput, statusPatch, toDateInput } from '../util';
 import Cover from './Cover';
+import GenrePicker from './GenrePicker';
 import Stars from './Stars';
 
 export default function BookDetails({ book, allTags, onUpdate, onOpen, onCover, onDelete, onClose }) {
@@ -104,8 +105,8 @@ export default function BookDetails({ book, allTags, onUpdate, onOpen, onCover, 
             )}
 
             <div className="field">
-              <span className="field-label">Collections</span>
-              <TagEditor tags={book.tags} suggestions={allTags} onChange={(tags) => update({ tags })} />
+              <span className="field-label">Genres</span>
+              <GenrePicker tags={book.tags} suggestions={allTags} onChange={(tags) => update({ tags })} />
             </div>
 
             <div className="field-row">
@@ -154,58 +155,3 @@ export default function BookDetails({ book, allTags, onUpdate, onOpen, onCover, 
   );
 }
 
-function TagEditor({ tags, suggestions, onChange }) {
-  const [draft, setDraft] = useState('');
-  const add = (value) => {
-    const t = value.trim().replace(/\s+/g, ' ').slice(0, 40);
-    if (t && !tags.some((x) => x.toLowerCase() === t.toLowerCase())) onChange([...tags, t]);
-    setDraft('');
-  };
-  const unused = suggestions.filter((s) => !tags.includes(s));
-  return (
-    <div className="tags">
-      {tags.map((t) => (
-        <span key={t} className="tag">
-          {t}
-          <button onClick={() => onChange(tags.filter((x) => x !== t))} aria-label={`Remove ${t}`}>
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        className="tag-input"
-        value={draft}
-        list="tag-suggestions"
-        placeholder={tags.length ? 'Add…' : 'Add to a collection, e.g. Sci-fi'}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v.endsWith(',')) add(v.slice(0, -1));
-          else setDraft(v);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            add(draft);
-          } else if (e.key === 'Backspace' && !draft && tags.length) {
-            onChange(tags.slice(0, -1));
-          }
-        }}
-        onBlur={() => draft && add(draft)}
-      />
-      <datalist id="tag-suggestions">
-        {unused.map((s) => (
-          <option key={s} value={s} />
-        ))}
-      </datalist>
-      {unused.length > 0 && !draft && (
-        <div className="tag-suggest">
-          {unused.slice(0, 6).map((s) => (
-            <button key={s} onClick={() => add(s)}>
-              + {s}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

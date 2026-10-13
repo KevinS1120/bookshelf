@@ -7,6 +7,8 @@ export const THEMES = [
   { id: 'sepia', label: 'Sepia', bg: '#f4ecd8', fg: '#433422', link: '#8a5a1f' },
   { id: 'sage', label: 'Sage', bg: '#e3eadd', fg: '#2c3a2a', link: '#3b6b35' },
   { id: 'forest', label: 'Forest', bg: '#10271d', fg: '#dfe8dc', link: '#e0bb6a' },
+  { id: 'library', label: 'Library', bg: '#1c1510', fg: '#e6d9bf', link: '#d4ae66' },
+  { id: 'parchment', label: 'Parchment', bg: '#f1e6cc', fg: '#2e2418', link: '#7c2d2d' },
   { id: 'dark', label: 'Dark', bg: '#1c1c1e', fg: '#d6d3cd', link: '#8ab4f8' },
   { id: 'black', label: 'Black', bg: '#000000', fg: '#bdbab4', link: '#8ab4f8' },
   { id: 'custom', label: 'Custom' },
@@ -14,6 +16,7 @@ export const THEMES = [
 
 export const FONTS = [
   { id: 'publisher', label: 'Original', stack: null },
+  { id: 'garamond', label: 'Garamond', stack: '"EB Garamond", Garamond, Georgia, serif', webFont: 'EB+Garamond:ital,wght@0,400;0,600;1,400' },
   { id: 'serif', label: 'Georgia', stack: 'Georgia, "Times New Roman", serif' },
   { id: 'palatino', label: 'Palatino', stack: '"Palatino Linotype", Palatino, "Book Antiqua", serif' },
   { id: 'sans', label: 'Sans', stack: 'system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
@@ -32,7 +35,7 @@ export const LINE_HEIGHTS = [
 export const PAGE_WIDTH_MAX = 1600; // slider maximum, meaning "no limit"
 
 export const DEFAULT_SETTINGS = {
-  theme: 'forest',
+  theme: 'library',
   customBg: '#fdf6e3',
   customFg: '#2b2b2b',
   textColor: null, // overrides the theme's text color (EPUB)
@@ -112,8 +115,11 @@ export function epubCss(s) {
   if (c.dark) css += 'img, svg { filter: brightness(0.85); }\n';
   if (s.fontSize !== 100) css += `body { font-size: ${s.fontSize}% !important; }
 `;
-  const font = FONTS.find((f) => f.id === s.font)?.stack;
-  if (font) css += `body, body *:not(pre):not(code):not(kbd):not(samp) { font-family: ${font} !important; }\n`;
+  const fontDef = FONTS.find((f) => f.id === s.font);
+  const font = fontDef?.stack;
+  // Web fonts have to be loaded inside the book's own pages too (must come first).
+  if (fontDef?.webFont) css = `@import url('https://fonts.googleapis.com/css2?family=${fontDef.webFont}&display=swap');\n${css}`;
+  if (font) css +=`body, body *:not(pre):not(code):not(kbd):not(samp) { font-family: ${font} !important; }\n`;
   const lh = LINE_HEIGHTS.find((l) => l.id === s.lineHeight)?.value;
   if (lh) css += `body, body * { line-height: ${lh} !important; }\n`;
   if (s.align !== 'publisher') {

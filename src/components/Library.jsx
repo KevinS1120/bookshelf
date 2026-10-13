@@ -144,7 +144,7 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
         <input
           className="search"
           type="search"
-          placeholder="Search title, author, or collection"
+          placeholder="Search title, author, or genre"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -227,8 +227,8 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
           )}
 
           {allTags.length > 0 && (
-            <div className="collections" role="tablist" aria-label="Collections">
-              <span className="collections-label">Collections</span>
+            <div className="collections" role="tablist" aria-label="Genres">
+              <span className="collections-label">Genres</span>
               <button className={!activeTag ? 'active' : ''} onClick={() => setTag(null)}>
                 All books
               </button>

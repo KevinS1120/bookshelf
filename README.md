@@ -34,12 +34,12 @@ Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.y
 
 ## Features
 
-- Library with covers, search, filters, and sorting, in a dark forest-green theme
+- Library with covers, search, filters, and sorting, in a dark academia theme (walnut, parchment, brass)
 - **⋯ menu on every book**: read, change status (To read / Reading / On hold / Finished / Did not
   finish), start over, change cover, remove
 - **Covers**: upload your own image, search Open Library, restore the book's own cover, or none.
   Changes sync to every device.
-- **Collections**: tag books (e.g. "Sci-fi", "Class") and filter by collection
+- **Genres**: tap genre tags (Fantasy, Romance, Classics, …) or add your own, and filter by genre
 - **Yearly reading goal**, **reading time** (this week, with a 14-day chart), and a **daily streak**
 - Status, 1–5 star ratings, start/finish dates, notes
 - Reader for PDF and EPUB: drag pages with your finger to turn them (the next page slides in),
