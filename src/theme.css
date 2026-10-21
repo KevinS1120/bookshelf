@@ -482,3 +482,256 @@ select {
   color: var(--star);
   text-shadow: 0 0 6px rgb(216 176 98 / 0.35);
 }
+
+/* ---------- series & dragging books ---------- */
+
+.book-open {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* Press and hold: the book lifts, ready to move */
+.book-open.lifted .cover-wrap {
+  transform: scale(1.06) rotate(-1.5deg);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.6), 0 0 0 2px var(--accent);
+  transition: transform 0.15s ease-out, box-shadow 0.15s;
+}
+.book-card.is-dragged {
+  opacity: 0.3;
+}
+.book-card.drop-target .cover-wrap,
+.series-card.drop-target .series-stack {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 3px var(--accent), 0 0 30px rgb(200 161 90 / 0.45);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.series-card.drop-target .series-stack {
+  border-radius: 6px;
+}
+body.dragging-book,
+body.dragging-book * {
+  cursor: grabbing !important;
+}
+body.dragging-book {
+  overscroll-behavior: none;
+  touch-action: none;
+}
+.drag-ghost {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  transform: rotate(-4deg) scale(1.06);
+  filter: drop-shadow(0 22px 34px rgb(0 0 0 / 0.65));
+}
+.drag-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  transform: translateX(-50%) rotate(4deg);
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: 600 13px var(--body-serif);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.4);
+}
+
+/* A series in the grid: covers stacked like books on a shelf */
+.series-stack {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  margin: 0 10px 0 0;
+}
+.series-layer {
+  position: absolute;
+  inset: 0;
+}
+.series-layer .cover-wrap {
+  height: 100%;
+}
+.series-layer .cover {
+  height: 100%;
+}
+.series-layer.layer-1 {
+  transform: translate(6px, -6px) rotate(3deg);
+  filter: brightness(0.75);
+}
+.series-layer.layer-2 {
+  transform: translate(11px, -11px) rotate(6deg);
+  filter: brightness(0.55);
+}
+.series-badge {
+  z-index: 2;
+  background: linear-gradient(180deg, var(--oxblood-hi), var(--oxblood)) !important;
+  border-color: #9a3d35 !important;
+  color: #f6ead4 !important;
+}
+.series-card strong {
+  margin-top: 14px !important;
+}
+.series-label {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--accent);
+}
+
+/* Open series */
+.series-view {
+  width: min(860px, 100%);
+}
+.series-view > .field-label {
+  display: block;
+  margin-bottom: 2px;
+}
+.series-view .title-input {
+  width: 100%;
+}
+.series-count {
+  margin: 2px 0 14px;
+  font-style: italic;
+}
+.series-hint {
+  margin: -2px 0 6px;
+}
+.series-grid {
+  margin: 20px 0 8px;
+}
+.name-series {
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.name-series h2 {
+  margin: 0;
+}
+.name-series p {
+  margin: 0;
+}
+.series-name-input {
+  font: 600 22px var(--serif);
+}
+.row-gap.end {
+  justify-content: flex-end;
+}
+
+/* Series reading order */
+.order-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+}
+.order-list {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  counter-reset: none;
+}
+.order-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #231a14, #1b140f);
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+.order-row.is-dragged {
+  opacity: 0.3;
+}
+.order-row.drop-target {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 24px rgb(200 161 90 / 0.35);
+  transform: scale(1.015);
+}
+.order-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  background: none;
+  padding: 2px;
+  text-align: left;
+  color: inherit;
+}
+.order-num {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--brass-line);
+  color: var(--accent);
+  font: 600 17px var(--serif);
+  background: rgb(0 0 0 / 0.25);
+}
+.order-cover {
+  width: 40px;
+  flex-shrink: 0;
+  display: block;
+}
+.order-cover .cover-title {
+  font-size: 6px;
+}
+.order-cover .cover-author {
+  display: none;
+}
+.order-cover.cover-wrap::after,
+.order-cover .cover-placeholder::before {
+  display: none;
+}
+.order-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.order-text strong {
+  font: 600 17px/1.2 var(--serif);
+}
+.order-state {
+  font-style: italic;
+}
+.order-state.done {
+  color: #8fbf9d;
+}
+.order-arrows {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.order-arrows .icon-btn {
+  min-width: 34px;
+  height: 24px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.order-arrows .icon-btn:not(:disabled):hover {
+  color: var(--accent);
+}
+.order-row .menu-btn-inline {
+  margin: 0;
+  align-self: center;
+}
+
+/* Big titles stay big on phones (the 16px input rule only exists to stop iOS zooming) */
+@media (max-width: 720px) {
+  .title-input {
+    font-size: 26px !important;
+  }
+  .series-name-input {
+    font-size: 21px !important;
+  }
+}
+.series-tags {
+  margin-top: 8px;
+}

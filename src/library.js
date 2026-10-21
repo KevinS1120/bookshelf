@@ -35,7 +35,8 @@ const isBookFile = (item) => item.file && /\.(pdf|epub)$/i.test(item.name);
 const DATA_FILE = '_bookshelf/library.json';
 // doc: { version, books: { [id]: {...} }, settings: { goals: { [year]: n } }, activity: { [yyyy-mm-dd]: seconds } }
 let data = null; // { doc, eTag }
-const emptyDoc = () => ({ version: 1, books: {}, settings: {}, activity: {} });
+// series: { [id]: { name, bookIds: [...in reading order], tags: [], createdAt } }
+const emptyDoc = () => ({ version: 1, books: {}, settings: {}, activity: {}, series: {} });
 
 async function readData() {
   let meta;
@@ -273,10 +274,58 @@ export async function deleteBook(id) {
   cache.removeBook(id);
   updateData((doc) => {
     delete doc.books[id];
+    removeFromAllSeries(doc, id);
   }).catch(() => {});
   for (const rel of [coverPath(id), `_bookshelf/locations/${id}.json`]) {
     graph(itemPath(rel), { method: 'DELETE' }).catch(() => {});
   }
+}
+
+// ---------- series ----------
+// Books grouped into a named series. The series' tags are also kept on each
+// book in it (the app adds/removes them when the series' tags change).
+
+function removeFromAllSeries(doc, bookId) {
+  for (const [sid, sr] of Object.entries(doc.series ?? {})) {
+    sr.bookIds = sr.bookIds.filter((b) => b !== bookId);
+    if (!sr.bookIds.length) delete doc.series[sid];
+  }
+}
+
+export function getSeries() {
+  return Object.entries(data?.doc.series ?? {}).map(([id, sr]) => ({ id, tags: [], ...sr }));
+}
+
+export async function createSeries(name, bookIds) {
+  const id = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  await updateData((doc) => {
+    doc.series ??= {};
+    for (const b of bookIds) removeFromAllSeries(doc, b);
+    doc.series[id] = { name, bookIds: [...bookIds], tags: [], createdAt: Date.now() };
+  });
+  return id;
+}
+
+export async function updateSeries(id, patch) {
+  await updateData((doc) => {
+    const sr = doc.series?.[id];
+    if (!sr) return;
+    if (patch.bookIds) {
+      for (const b of patch.bookIds) if (!sr.bookIds.includes(b)) removeFromAllSeries(doc, b);
+    }
+    Object.assign(doc.series[id] ?? (doc.series[id] = sr), patch);
+    if (!doc.series[id].bookIds.length) delete doc.series[id];
+  });
+}
+
+export async function removeFromSeries(bookId) {
+  await updateData((doc) => removeFromAllSeries(doc, bookId));
+}
+
+export async function deleteSeries(id) {
+  await updateData((doc) => {
+    delete doc.series?.[id];
+  });
 }
 
 // ---------- goal & reading activity ----------

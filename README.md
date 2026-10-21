@@ -40,6 +40,9 @@ Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.y
 - **Covers**: upload your own image, search Open Library, restore the book's own cover, or none.
   Changes sync to every device.
 - **Genres**: tap genre tags (Fantasy, Romance, Classics, …) or add your own, and filter by genre
+- **Series**: press and hold a book and drop it onto another (or click and drag) to make a named
+  series; drop more books onto the series to add them. Series tags go on every book in it. Set the
+  reading order by dragging, with arrows, or with Auto-order (reads "Book 2", "#3", "Vol. IV"…)
 - **Yearly reading goal**, **reading time** (this week, with a 14-day chart), and a **daily streak**
 - Status, 1–5 star ratings, start/finish dates, notes
 - Reader for PDF and EPUB: drag pages with your finger to turn them (the next page slides in),

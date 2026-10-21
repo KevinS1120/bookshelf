@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createBook } from '../library';
 import { importFile } from '../importBook';
 import { countLocalBooks, migrateLocalBooks } from '../migrate';
+import { useDraggableBook, useDragManager } from '../dnd';
 import { useLongPress, usePullToRefresh } from '../native';
 import { STATUSES, dayKey, formatDuration, readingStreak, usePref } from '../util';
 import BookMenu from './BookMenu';
 import Cover from './Cover';
+import { SeriesCard } from './Series';
 import Stars from './Stars';
 
 const SORTS = {
@@ -17,7 +19,7 @@ const SORTS = {
   progress: { label: 'Progress', fn: (a, b) => b.progress - a.progress },
 };
 
-export default function Library({ books, extras, allTags, actions, onAdd, onRefresh, onSettings, onSetGoal, error }) {
+export default function Library({ books, series = [], extras, allTags, actions, onAdd, onRefresh, onSettings, onSetGoal, onOpenSeries, error }) {
   const [filter, setFilter] = usePref('lib-filter', 'all');
   const [tag, setTag] = usePref('lib-tag', null);
   const [sort, setSort] = usePref('lib-sort', 'recent');
@@ -94,6 +96,30 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
       .sort(SORTS[sort]?.fn ?? SORTS.recent.fn);
   }, [inTag, filter, sort, query]);
 
+  // Books in a series show as one stacked card, except while filtering or
+  // searching, when each matching book shows (labelled with its series).
+  const seriesOf = useMemo(() => {
+    const m = new Map();
+    for (const sr of series) sr.bookIds.forEach((id, i) => m.set(id, { sr, index: i }));
+    return m;
+  }, [series]);
+  const grouped = filter === 'all' && !query.trim() && !activeTag;
+  const items = useMemo(() => {
+    if (!grouped) return visible.map((b) => ({ key: b.id, book: b, inSeries: seriesOf.get(b.id) }));
+    const byId = new Map(books.map((b) => [b.id, b]));
+    const out = [];
+    const seen = new Set();
+    for (const b of visible) {
+      const hit = seriesOf.get(b.id);
+      if (!hit) out.push({ key: b.id, book: b });
+      else if (!seen.has(hit.sr.id)) {
+        seen.add(hit.sr.id);
+        out.push({ key: hit.sr.id, series: hit.sr, books: hit.sr.bookIds.map((id) => byId.get(id)).filter(Boolean) });
+      }
+    }
+    return out;
+  }, [grouped, visible, books, seriesOf]);
+
   const continueReading = useMemo(
     () =>
       books
@@ -127,6 +153,7 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
     onStartOver: () => actions.startOver(b),
     onCover: () => actions.cover(b),
     onDelete: () => actions.remove(b),
+    onRemoveFromSeries: seriesOf.has(b.id) ? () => actions.removeFromSeries(b) : null,
   });
 
   return (
@@ -270,9 +297,19 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
             <p className="muted center pad">No books match.</p>
           ) : (
             <div className="grid">
-              {visible.map((b) => (
-                <BookCard key={b.id} book={b} menuProps={menuProps(b)} onSelect={() => actions.details(b)} />
-              ))}
+              {items.map((it) =>
+                it.series ? (
+                  <SeriesCard key={it.key} series={it.series} books={it.books} onOpen={() => onOpenSeries(it.series.id)} />
+                ) : (
+                  <BookCard
+                    key={it.key}
+                    book={it.book}
+                    menuProps={menuProps(it.book)}
+                    onSelect={() => actions.details(it.book)}
+                    seriesLabel={it.inSeries ? `${it.inSeries.sr.name} · #${it.inSeries.index + 1}` : null}
+                  />
+                ),
+              )}
             </div>
           )}
         </main>
@@ -287,16 +324,20 @@ export default function Library({ books, extras, allTags, actions, onAdd, onRefr
   );
 }
 
-// Tap for details; press and hold (or right-click) for the actions menu.
-function BookCard({ book: b, menuProps, onSelect }) {
+// Tap for details. Press and hold (or right-click) for the actions menu; hold and
+// move (or click and drag) to drop it onto another book or a series.
+export function BookCard({ book: b, menuProps, onSelect, seriesLabel = null, number = null, context = null }) {
   const menu = useRef(null);
-  const press = useLongPress(() => menu.current?.open());
+  const dragRef = useDraggableBook(b, { onMenu: () => menu.current?.open(), context });
+  const drag = useDragManager()?.drag;
+  const isDragged = drag?.book.id === b.id;
+  const isTarget = drag?.over === `book:${b.id}`;
   return (
-    <div className="book-card">
-      <button className="book-open" onClick={onSelect} aria-label={b.title} {...press}>
+    <div className={`book-card${isDragged ? ' is-dragged' : ''}${isTarget ? ' drop-target' : ''}`} data-drop={`book:${b.id}`}>
+      <button ref={dragRef} className="book-open" onClick={onSelect} aria-label={b.title}>
         <div className="cover-wrap">
           <Cover book={b} />
-          <span className="badge">{b.format.toUpperCase()}</span>
+          <span className="badge">{number != null ? `#${number}` : b.format.toUpperCase()}</span>
           {b.status === 'finished' && <span className="badge done">✓</span>}
           {b.status === 'paused' && <span className="badge paused">❚❚</span>}
           {(b.status === 'reading' || b.status === 'paused') && b.progress > 0 && (
@@ -309,6 +350,7 @@ function BookCard({ book: b, menuProps, onSelect }) {
       <BookMenu ref={menu} {...menuProps} className="menu-btn-cover" />
       <strong className="clamp-2">{b.title}</strong>
       {b.author && <span className="muted clamp-1">{b.author}</span>}
+      {seriesLabel && <span className="series-label clamp-1">{seriesLabel}</span>}
       {b.rating > 0 && <Stars value={b.rating} size="sm" />}
     </div>
   );

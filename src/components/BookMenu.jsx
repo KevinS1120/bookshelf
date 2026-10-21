@@ -7,7 +7,7 @@ const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
 
 // The ⋯ menu on each book: open, change status, start over, cover, remove.
 // A dropdown on larger screens, an action sheet on phones. `ref.open()` opens it (long-press).
-export default function BookMenu({ ref, book, onOpen, onDetails, onStatus, onStartOver, onCover, onDelete, className = '' }) {
+export default function BookMenu({ ref, book, onOpen, onDetails, onStatus, onStartOver, onCover, onRemoveFromSeries, onDelete, className = '' }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const buttonRef = useRef(null);
@@ -112,6 +112,11 @@ export default function BookMenu({ ref, book, onOpen, onDetails, onStatus, onSta
               <button role="menuitem" onClick={act(onCover)}>
                 Change cover…
               </button>
+              {onRemoveFromSeries && (
+                <button role="menuitem" onClick={act(onRemoveFromSeries)}>
+                  Remove from series
+                </button>
+              )}
               <div className="menu-sep" />
               <button role="menuitem" className="danger" onClick={act(onDelete)}>
                 Remove from library

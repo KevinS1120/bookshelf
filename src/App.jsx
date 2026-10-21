@@ -4,6 +4,9 @@ import { newerVersionAvailable } from './native';
 import { statusPatch } from './util';
 import * as library from './library';
 import Library from './components/Library';
+import { DragGhost, NameSeriesDialog, SeriesView } from './components/Series';
+import { DragContext, useDragController } from './dnd';
+import { useSeries } from './useSeries';
 import BookDetails from './components/BookDetails';
 import Reader from './components/Reader';
 import CoverDialog from './components/CoverDialog';
@@ -48,6 +51,7 @@ function Bookshelf({ account, folder }) {
   const [readingId, setReadingId] = useState(null);
   const [detailsId, setDetailsId] = useState(null);
   const [coverId, setCoverId] = useState(null);
+  const seriesState = useRef(null);
   const [showSettings, setShowSettings] = useState(false);
   const readingRef = useRef(null);
   readingRef.current = readingId;
@@ -56,6 +60,7 @@ function Bookshelf({ account, folder }) {
     try {
       setBooks(await library.listBooks());
       setExtras(library.getExtras());
+      seriesState.current?.reload();
       setLoadError('');
     } catch (err) {
       setLoadError(err.message);
@@ -151,9 +156,26 @@ function Bookshelf({ account, folder }) {
       startOver: (book) => updateBook(book.id, { progress: 0, location: null }),
       cover: (book) => setCoverId(book.id),
       remove: (book) => confirm(`Remove "${book.title}" from your library? It goes to your OneDrive recycle bin.`) && removeBook(book.id),
+      removeFromSeries: (book) => seriesState.current.removeBook(book),
     }),
     [openBook, updateBook, removeBook],
   );
+
+  // Series (books dropped onto each other). Tags on a series go on all its books.
+  const S = useSeries({ api: library, books: books ?? [], updateBook, onError: setSaveError });
+  seriesState.current = S;
+  const dragController = useDragController(S.handleDrop);
+
+  const menuPropsFor = (b) => ({
+    book: b,
+    onOpen: () => actions.open(b),
+    onDetails: () => actions.details(b),
+    onStatus: (st) => actions.status(b, st),
+    onStartOver: () => actions.startOver(b),
+    onCover: () => actions.cover(b),
+    onDelete: () => actions.remove(b),
+    onRemoveFromSeries: () => actions.removeFromSeries(b),
+  });
 
   const allTags = useMemo(
     () => [...new Set((books ?? []).flatMap((b) => b.tags))].sort((a, b) => a.localeCompare(b)),
@@ -183,10 +205,14 @@ function Bookshelf({ account, folder }) {
 
   const selected = books.find((b) => b.id === detailsId);
   const coverBook = books.find((b) => b.id === coverId);
+  const openSeries = S.open;
+  const seriesBooks = openSeries ? openSeries.bookIds.map((id) => books.find((b) => b.id === id)).filter(Boolean) : [];
   return (
-    <>
+    <DragContext.Provider value={dragController}>
       <Library
         books={books}
+        series={S.series}
+        onOpenSeries={S.openSeries}
         extras={extras}
         allTags={allTags}
         actions={actions}
@@ -196,6 +222,29 @@ function Bookshelf({ account, folder }) {
         onSetGoal={setGoal}
         error={loadError || saveError}
       />
+      {openSeries && (
+        <SeriesView
+          series={openSeries}
+          books={seriesBooks}
+          allTags={allTags}
+          menuPropsFor={menuPropsFor}
+          onSelect={(b) => setDetailsId(b.id)}
+          onMove={(id, delta) => S.move(openSeries, id, delta)}
+          onAutoOrder={() => S.autoOrder(openSeries)}
+          onRename={(name) => S.rename(openSeries, name)}
+          onTags={(tags) => S.setTags(openSeries, tags)}
+          onUngroup={() => S.ungroup(openSeries)}
+          onClose={() => S.openSeries(null)}
+        />
+      )}
+      {S.naming && (
+        <NameSeriesDialog
+          suggestion={S.naming.suggestion}
+          count={S.naming.bookIds.length}
+          onCreate={S.create}
+          onCancel={S.cancelNaming}
+        />
+      )}
       {selected && (
         <BookDetails
           book={selected}
@@ -223,6 +272,7 @@ function Bookshelf({ account, folder }) {
           onClose={() => setShowSettings(false)}
         />
       )}
-    </>
+      <DragGhost />
+    </DragContext.Provider>
   );
 }

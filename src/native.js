@@ -182,6 +182,10 @@ export function useDragToClose(ref, onClose, { enabled = true } = {}) {
     };
     const move = (e) => {
       if (!drag) return;
+      if (document.body.classList.contains('dragging-book') || document.querySelector('.lifted')) {
+        drag = null; // a book is being moved, not the panel
+        return;
+      }
       const t = e.touches[0];
       const dx = t.clientX - drag.x;
       const dy = t.clientY - drag.y;
@@ -298,8 +302,14 @@ export function usePullToRefresh(onRefresh) {
       startY = e.touches[0].clientY;
       distance = 0;
     };
+    const holdingBook = () => document.body.classList.contains('dragging-book') || document.querySelector('.lifted');
     const movePull = (e) => {
       if (startY == null) return;
+      if (holdingBook()) {
+        startY = null;
+        setPull(0);
+        return;
+      }
       distance = e.touches[0].clientY - startY;
       if (distance <= 0 || window.scrollY > 0) {
         setPull(0);
