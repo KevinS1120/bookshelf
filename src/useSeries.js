@@ -94,6 +94,12 @@ export function useSeries({ api, books, updateBook, onError }) {
     save(() => api.updateSeries(sr.id, { name }));
   };
 
+  // cover: { type: 'design', bg, foil, icon, paths } | null (stacked covers)
+  const setCover = (sr, cover) => {
+    setSeries((list) => list.map((x) => (x.id === sr.id ? { ...x, cover } : x)));
+    save(() => api.updateSeries(sr.id, { cover }));
+  };
+
   const ungroup = (sr) => {
     setOpenSeriesId(null);
     setSeries((list) => list.filter((x) => x.id !== sr.id));
@@ -147,6 +153,7 @@ export function useSeries({ api, books, updateBook, onError }) {
     ungroup,
     removeBook,
     move,
+    setCover,
     autoOrder,
     handleDrop,
   };

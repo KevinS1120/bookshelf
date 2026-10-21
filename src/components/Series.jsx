@@ -6,12 +6,14 @@ import { statusLabel } from '../util';
 import BookMenu from './BookMenu';
 import Cover from './Cover';
 import GenrePicker from './GenrePicker';
+import { SeriesDesignCover } from './SeriesCover';
 
 // A series in the library grid: its covers stacked. Drop a book on it to add it.
 export function SeriesCard({ series, books, onOpen }) {
   const drag = useDragManager()?.drag;
   const over = drag?.over === `series:${series.id}`;
-  const shown = books.slice(0, 3);
+  const designed = series.cover?.type === 'design';
+  const shown = designed ? books.slice(0, 2) : books.slice(0, 3);
   const reading = books.find((b) => b.status === 'reading');
   const done = books.filter((b) => b.status === 'finished').length;
   return (
@@ -22,12 +24,19 @@ export function SeriesCard({ series, books, onOpen }) {
             .slice()
             .reverse()
             .map((b, i, arr) => (
-              <div key={b.id} className={`series-layer layer-${arr.length - 1 - i}`}>
+              <div key={b.id} className={`series-layer layer-${arr.length - 1 - i + (designed ? 1 : 0)}`}>
                 <div className="cover-wrap">
                   <Cover book={b} />
                 </div>
               </div>
             ))}
+          {designed && (
+            <div className="series-layer layer-0">
+              <div className="cover-wrap">
+                <SeriesDesignCover cover={series.cover} name={series.name} />
+              </div>
+            </div>
+          )}
           <span className="badge series-badge">Series · {books.length}</span>
         </div>
       </button>
@@ -92,7 +101,7 @@ export function NameSeriesDialog({ suggestion, count, onCreate, onCancel }) {
 
 // An open series: its name, tags for every book in it, and its books in order
 // (drag a book onto another to move it there).
-export function SeriesView({ series, books, allTags, menuPropsFor, onSelect, onMove, onAutoOrder, onRename, onTags, onUngroup, onClose }) {
+export function SeriesView({ series, books, allTags, menuPropsFor, onSelect, onMove, onAutoOrder, onRename, onTags, onDesignCover, onUngroup, onClose }) {
   const [name, setName] = useState(series.name);
   const sheetRef = useRef(null);
   useBackClose(onClose);
@@ -114,18 +123,33 @@ export function SeriesView({ series, books, allTags, menuPropsFor, onSelect, onM
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={sheetRef} className="modal series-view" role="dialog" aria-modal="true" aria-label={series.name}>
         <div className="sheet-handle" data-drag-handle />
-        <span className="field-label">Series</span>
-        <input
-          className="title-input"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={commitName}
-          onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-          aria-label="Series name"
-        />
-        <p className="muted series-count">
-          {books.length} book{books.length === 1 ? '' : 's'}
-        </p>
+        <div className="series-head">
+          <button className="series-cover-btn" onClick={onDesignCover} title="Change the series cover">
+            {series.cover?.type === 'design' ? (
+              <SeriesDesignCover cover={series.cover} name={series.name} />
+            ) : (
+              <span className="cover-wrap">{books[0] && <Cover book={books[0]} />}</span>
+            )}
+            <span className="cover-edit-label">Change cover</span>
+          </button>
+          <div className="series-head-text">
+            <span className="field-label">Series</span>
+            <input
+              className="title-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+              aria-label="Series name"
+            />
+            <p className="muted series-count">
+              {books.length} book{books.length === 1 ? '' : 's'}
+            </p>
+            <button className="btn small-btn" onClick={onDesignCover}>
+              {series.cover ? 'Change cover' : 'Design a cover'}
+            </button>
+          </div>
+        </div>
 
         <div className="order-head">
           <span className="field-label">Reading order</span>

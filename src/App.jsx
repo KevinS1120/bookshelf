@@ -5,6 +5,7 @@ import { statusPatch } from './util';
 import * as library from './library';
 import Library from './components/Library';
 import { DragGhost, NameSeriesDialog, SeriesView } from './components/Series';
+import { SeriesCoverDialog } from './components/SeriesCover';
 import { DragContext, useDragController } from './dnd';
 import { useSeries } from './useSeries';
 import BookDetails from './components/BookDetails';
@@ -52,6 +53,7 @@ function Bookshelf({ account, folder }) {
   const [detailsId, setDetailsId] = useState(null);
   const [coverId, setCoverId] = useState(null);
   const seriesState = useRef(null);
+  const [designing, setDesigning] = useState(false); // the open series' cover designer
   const [showSettings, setShowSettings] = useState(false);
   const readingRef = useRef(null);
   readingRef.current = readingId;
@@ -233,8 +235,19 @@ function Bookshelf({ account, folder }) {
           onAutoOrder={() => S.autoOrder(openSeries)}
           onRename={(name) => S.rename(openSeries, name)}
           onTags={(tags) => S.setTags(openSeries, tags)}
+          onDesignCover={() => setDesigning(true)}
           onUngroup={() => S.ungroup(openSeries)}
           onClose={() => S.openSeries(null)}
+        />
+      )}
+      {openSeries && designing && (
+        <SeriesCoverDialog
+          series={openSeries}
+          onSave={(cover) => {
+            S.setCover(openSeries, cover);
+            setDesigning(false);
+          }}
+          onClose={() => setDesigning(false)}
         />
       )}
       {S.naming && (
