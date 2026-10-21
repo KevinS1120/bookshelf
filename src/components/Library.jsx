@@ -63,10 +63,10 @@ export default function Library({ books, series = [], extras, allTags, actions, 
         continue;
       }
       try {
-        const { meta, cover } = await importFile(f);
+        const { meta, cover, file } = await importFile(f);
         // New books join the collection you're looking at.
         if (activeTag) meta.tags = [activeTag];
-        const book = await createBook(meta, f, cover, (pct) =>
+        const book = await createBook(meta, file, cover, (pct) =>
           setImporting({ done: i, total: files.length, name: f.name, pct }),
         );
         onAdd(book);
@@ -184,7 +184,7 @@ export default function Library({ books, series = [], extras, allTags, actions, 
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.epub,application/pdf,application/epub+zip"
+          accept=".pdf,.epub,.azw3,.azw,.mobi,.prc,application/pdf,application/epub+zip,application/x-mobipocket-ebook,application/vnd.amazon.ebook"
           multiple
           hidden
           onChange={(e) => {
@@ -236,7 +236,7 @@ export default function Library({ books, series = [], extras, allTags, actions, 
         <button className="empty" onClick={() => inputRef.current.click()}>
           <span className="empty-icon">📖</span>
           <strong>Your shelf is empty</strong>
-          <span>Drop PDF or EPUB files anywhere on this page, or click to choose files.</span>
+          <span>Drop PDF, EPUB, AZW3 or MOBI files anywhere on this page, or click to choose files.</span>
         </button>
       ) : (
         <main className="lib-main">

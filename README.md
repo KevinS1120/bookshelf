@@ -1,6 +1,6 @@
 # Bookshelf
 
-A personal reading app for PDF and EPUB books that works on any device. Your library lives in a
+A personal reading app for PDF, EPUB and Kindle (AZW3/MOBI) books that works on any device. Your library lives in a
 **Bookshelf** folder in your personal OneDrive: each book is a file there, and your status, rating,
 dates, progress, notes and bookmarks sync between devices. You can stop on your phone and carry on
 from the same spot on your iPad.
@@ -46,6 +46,8 @@ Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.y
   color, a foil stamp and one of 400 adventure icons ([game-icons.net](https://game-icons.net), CC BY 3.0)
 - **Yearly reading goal**, **reading time** (this week, with a 14-day chart), and a **daily streak**
 - Status, 1–5 star ratings, start/finish dates, notes
+- Kindle books (AZW3, MOBI) are converted to EPUB in the browser when you add them
+  ([foliate-js](https://github.com/johnfactotum/foliate-js) parser). DRM-protected Kindle Store books and KFX files can't be opened.
 - Reader for PDF and EPUB: drag pages with your finger to turn them (the next page slides in),
   tap the sides, or use the arrow keys; tap the middle for full screen; drag the bar to jump
 - PDFs: pinch to zoom, double-tap the middle to zoom in/out

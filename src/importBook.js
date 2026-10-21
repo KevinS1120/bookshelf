@@ -4,6 +4,8 @@ import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import ePub from 'epubjs';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
+const KINDLE_EXT = /\.(azw3|azw|mobi|prc|kf8)$/i; // converted on import (convertKindle.js)
 export { pdfjsLib };
 
 function detectFormat(file) {
@@ -68,9 +70,20 @@ async function readEpub(file) {
   }
 }
 
-export async function importFile(file) {
+export async function importFile(original) {
+  let file = original;
+  if (KINDLE_EXT.test(original.name)) {
+    // Kindle books become EPUBs, so they work like any other book from here on.
+    try {
+      const { kindleToEpub } = await import('./convertKindle');
+      file = await kindleToEpub(original);
+    } catch (err) {
+      console.error(err);
+      throw new Error(`${original.name} ${/^(is|isn't|has) /.test(err.message) ? err.message : "couldn't be converted (the file may be damaged)"}`);
+    }
+  }
   const format = detectFormat(file);
-  if (!format) throw new Error(`${file.name}: only PDF and EPUB files are supported`);
+  if (!format) throw new Error(`${file.name}: only PDF, EPUB, AZW3 and MOBI files are supported`);
   let meta;
   try {
     meta = format === 'pdf' ? await readPdf(file) : await readEpub(file);
@@ -87,6 +100,7 @@ export async function importFile(file) {
       pageCount: meta.pageCount ?? null,
     },
     cover: meta.cover ?? null,
+    file, // the converted EPUB, for Kindle books
   };
 }
 
