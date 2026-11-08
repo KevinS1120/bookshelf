@@ -1,10 +1,8 @@
-// Chore schedules and who's up for each day. Days are local 'YYYY-MM-DD' keys.
+// Chore schedules: what's due each day. Days are local 'YYYY-MM-DD' keys.
 //
 // chore: {
 //   id, name, notes,
 //   schedule: { type: 'once' | 'daily' | 'weekly' | 'monthly', every: n, days: [0-6] (weekly), start: day },
-//   assign: person id | 'anyone' | 'turns',
-//   turnStart: person id (who goes first when taking turns),
 //   createdAt,
 // }
 
@@ -48,33 +46,12 @@ export function occursOn(s, key) {
   }
 }
 
-// How many times the chore came up before this day (for taking turns).
-export function occurrenceIndex(s, key) {
-  if (key <= s.start) return 0;
-  const every = Math.max(1, s.every || 1);
-  if (s.type === 'daily') return Math.ceil(daysBetween(s.start, key) / every);
-  let n = 0;
-  for (let k = s.start; k < key; k = addDays(k, 1)) if (occursOn(s, k)) n++;
-  return n;
-}
-
 // The last time it came up before `key`, looking back at most a year.
 export function previousOccurrence(s, key) {
   for (let k = addDays(key, -1), i = 0; k >= s.start && i < 400; k = addDays(k, -1), i++) {
     if (occursOn(s, k)) return k;
   }
   return null;
-}
-
-export function otherPerson(people, id) {
-  return people.find((p) => p.id !== id)?.id ?? id;
-}
-
-// Who the chore is for on a given day: a person's id, or 'anyone'.
-export function assigneeOn(chore, key, people) {
-  if (chore.assign !== 'turns') return chore.assign;
-  const first = chore.turnStart ?? people[0]?.id;
-  return occurrenceIndex(chore.schedule, key) % 2 === 0 ? first : otherPerson(people, first);
 }
 
 export const doneKey = (choreId, key) => `${choreId}|${key}`;
@@ -92,11 +69,7 @@ export function choresFor(doc, key, now = today()) {
       if (prev && !doc.done[doneKey(chore.id, prev)]) list.push({ chore, day: prev, overdue: true });
     }
   }
-  return list.map((item) => ({
-    ...item,
-    who: assigneeOn(item.chore, item.day, doc.people),
-    done: doc.done[doneKey(item.chore.id, item.day)] ?? null,
-  }));
+  return list.map((item) => ({ ...item, done: doc.done[doneKey(item.chore.id, item.day)] ?? null }));
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

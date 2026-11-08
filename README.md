@@ -39,9 +39,8 @@ The app opens on a menu: **Chores**, **Financial Planning** (coming soon) and **
 ### Chores
 - Today's date and today's chores, with a week strip to look ahead or back (or swipe sideways)
 - Schedules: once, every N days, chosen weekdays every N weeks, or monthly
-- Assign to either person, to anyone, or take turns (alternates each time it comes up)
+- One shared list with no profiles or assigning: you split the chores up yourselves
 - Tap the circle to check a chore off; missed chores stay at the top until done or due again
-- Filter by person, and a count of what each person did this week
 - Saved in `Bookshelf/_home/chores.json`, so every device sees the same list
 
 ### Bookshelf

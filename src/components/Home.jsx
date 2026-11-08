@@ -52,9 +52,7 @@ export default function Home({ account, chores, onOpen }) {
     const items = choresFor(doc, today, today);
     const left = items.filter((i) => !i.done).length;
     choresNote = !Object.keys(doc.chores).length
-      ? doc.people.length < 2
-        ? 'Set up your chore list'
-        : 'No chores yet'
+      ? 'Set up your chore list'
       : left === 0
         ? 'All done today'
         : `${left} left today`;

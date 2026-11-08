@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { haptic, useBackClose, useDragToClose } from '../native';
-import { usePref } from '../util';
-import { PERSON_COLORS } from '../chores/useChores';
 import { addDays, choresFor, daysBetween, describeSchedule, toDate, weekOf } from '../chores/schedule';
 
 const SUGGESTIONS = [
@@ -10,10 +8,6 @@ const SUGGESTIONS = [
 ];
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-const person = (people, id) => people.find((p) => p.id === id);
-const whoLabel = (chore, people) =>
-  chore.assign === 'anyone' ? 'Anyone' : chore.assign === 'turns' ? 'Take turns' : person(people, chore.assign)?.name ?? '';
 
 function relativeDay(key, todayKey) {
   const diff = daysBetween(todayKey, key);
@@ -31,40 +25,13 @@ function CheckIcon() {
   );
 }
 
-function TurnsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="turns-icon">
-      <path
-        d="M4 9h13l-3-3M20 15H7l3 3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function Avatar({ p, size = 26 }) {
-  if (!p) return <span className="avatar anyone" style={{ width: size, height: size }}>✶</span>;
-  return (
-    <span className="avatar" style={{ background: p.color, width: size, height: size }} title={p.name}>
-      {p.name.trim().charAt(0).toUpperCase() || '?'}
-    </span>
-  );
-}
-
 // ---------- the screen ----------
 
-export default function Chores({ chores, accountName, onHome }) {
-  const { doc, error, today, toggle, saveChore, deleteChore, setPeople } = chores;
-  const [me, setMe] = usePref('chores:me', null);
-  const [filter, setFilter] = usePref('chores:filter', 'all');
+export default function Chores({ chores, onHome }) {
+  const { doc, error, today, toggle, saveChore, deleteChore } = chores;
   const [selected, setSelected] = useState(today);
   const [editing, setEditing] = useState(null); // chore, or {} for a new one
   const [showAll, setShowAll] = useState(false);
-  const [showPeople, setShowPeople] = useState(false);
 
   // Follow the date over midnight if you're looking at "today".
   const lastToday = useRef(today);
@@ -82,7 +49,7 @@ export default function Chores({ chores, accountName, onHome }) {
   const onTouchEnd = (e) => {
     const s = swipe.current;
     swipe.current = null;
-    if (!s || e.target.closest('input, .week-strip')) return;
+    if (!s || e.target.closest('input, .week-strip, .modal-backdrop')) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - s.x;
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(t.clientY - s.y) * 2) {
@@ -93,57 +60,35 @@ export default function Chores({ chores, accountName, onHome }) {
 
   if (!doc) return <div className="loading">Loading chores…</div>;
 
-  const people = doc.people;
-  if (people.length < 2) {
-    return (
-      <div className="chores-page">
-        <ChoresHeader onHome={onHome} />
-        <main className="chores-main">
-          <PeopleForm
-            people={people}
-            accountName={accountName}
-            me={me}
-            first
-            onSave={(list, mine) => {
-              setPeople(list);
-              setMe(mine);
-            }}
-          />
-        </main>
-      </div>
-    );
-  }
-
-  const matches = (who) => filter === 'all' || who === filter || who === 'anyone';
-  const items = choresFor(doc, selected, today).filter((i) => matches(i.who));
+  const items = choresFor(doc, selected, today);
   const overdue = items.filter((i) => i.overdue && !i.done);
   const due = items
     .filter((i) => !i.overdue)
     .sort((a, b) => !!a.done - !!b.done || a.chore.name.localeCompare(b.chore.name));
   const left = due.filter((i) => !i.done).length + overdue.length;
+  const hasChores = Object.keys(doc.chores).length > 0;
 
   const check = (item) => {
     haptic(item.done ? 8 : 15);
-    const by = me && person(people, me) ? me : item.who !== 'anyone' ? item.who : people[0].id;
-    toggle(item.chore.id, item.day, by);
+    toggle(item.chore.id, item.day);
   };
-
-  // Done this week, per person (Monday to Sunday).
-  const week = weekOf(today);
-  const score = Object.fromEntries(people.map((p) => [p.id, 0]));
-  for (const [k, v] of Object.entries(doc.done)) {
-    const d = k.split('|')[1];
-    if (d >= week[0] && d <= week[6] && v.by in score) score[v.by]++;
-  }
-  const anyScore = Object.values(score).some(Boolean);
 
   return (
     <div className="chores-page" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      <ChoresHeader onHome={onHome}>
+      <header className="lib-header chores-header">
+        <button className="home-btn" onClick={onHome} aria-label="Home">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Home
+        </button>
+        <div className="brand">
+          <h1>Chores</h1>
+        </div>
         <button className="btn small-btn" onClick={() => setShowAll(true)}>
           All chores
         </button>
-      </ChoresHeader>
+      </header>
 
       <main className="chores-main">
         {error && <div className="save-error inline">{error}</div>}
@@ -157,26 +102,14 @@ export default function Chores({ chores, accountName, onHome }) {
           )}
         </div>
 
-        <WeekStrip doc={doc} selected={selected} today={today} matches={matches} onSelect={setSelected} />
-
-        <div className="seg who-filter" role="tablist" aria-label="Whose chores">
-          <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
-            Everyone
-          </button>
-          {people.map((p) => (
-            <button key={p.id} className={filter === p.id ? 'active' : ''} onClick={() => setFilter(p.id)}>
-              <span className="dot" style={{ background: p.color }} />
-              {p.name}
-            </button>
-          ))}
-        </div>
+        <WeekStrip doc={doc} selected={selected} today={today} onSelect={setSelected} />
 
         {overdue.length > 0 && (
           <section className="chore-section">
             <h3 className="field-label overdue-label">Missed</h3>
             <ul className="chore-list">
               {overdue.map((i) => (
-                <ChoreRow key={i.chore.id + i.day} item={i} people={people} today={today} onCheck={check} onEdit={setEditing} />
+                <ChoreRow key={i.chore.id + i.day} item={i} today={today} onCheck={check} onEdit={setEditing} />
               ))}
             </ul>
           </section>
@@ -187,52 +120,31 @@ export default function Chores({ chores, accountName, onHome }) {
           {due.length > 0 ? (
             <ul className="chore-list">
               {due.map((i) => (
-                <ChoreRow key={i.chore.id + i.day} item={i} people={people} today={today} onCheck={check} onEdit={setEditing} />
+                <ChoreRow key={i.chore.id + i.day} item={i} today={today} onCheck={check} onEdit={setEditing} />
               ))}
             </ul>
           ) : (
             <div className="chores-empty">
-              <p>{Object.keys(doc.chores).length ? 'Nothing due. Enjoy the day.' : 'No chores yet.'}</p>
-              {!Object.keys(doc.chores).length && (
+              <p>{hasChores ? 'Nothing due. Enjoy the day.' : 'No chores yet.'}</p>
+              {!hasChores && (
                 <button className="btn primary" onClick={() => setEditing({})}>
                   Add your first chore
                 </button>
               )}
             </div>
           )}
-          {due.length > 0 && left === 0 && <p className="all-done">All done for {relativeDay(selected, today).toLowerCase() === 'today' ? 'today' : 'the day'}.</p>}
+          {due.length > 0 && left === 0 && <p className="all-done">All done{selected === today ? ' for today' : ''}.</p>}
         </section>
-
-        {anyScore && (
-          <p className="chore-score">
-            <span className="field-label">This week</span>
-            {people.map((p) => (
-              <span key={p.id} className="score-person">
-                <span className="dot" style={{ background: p.color }} />
-                {p.name} <b>{score[p.id]}</b>
-              </span>
-            ))}
-          </p>
-        )}
       </main>
 
       <button className="fab" onClick={() => setEditing({})} aria-label="Add a chore">
         <span aria-hidden="true">+</span> Add chore
       </button>
 
-      {showAll && (
-        <AllChores
-          doc={doc}
-          onEdit={(c) => setEditing(c)}
-          onNew={() => setEditing({})}
-          onPeople={() => setShowPeople(true)}
-          onClose={() => setShowAll(false)}
-        />
-      )}
+      {showAll && <AllChores doc={doc} onEdit={setEditing} onNew={() => setEditing({})} onClose={() => setShowAll(false)} />}
       {editing && (
         <ChoreEditor
           chore={editing}
-          people={people}
           defaultDay={selected}
           onSave={(c) => {
             saveChore(c);
@@ -241,7 +153,7 @@ export default function Chores({ chores, accountName, onHome }) {
           onDelete={
             editing.id
               ? () => {
-                  if (confirm(`Delete "${editing.name}"? Its history goes too.`)) {
+                  if (confirm(`Delete "${editing.name}"? Its check-offs go too.`)) {
                     deleteChore(editing.id);
                     setEditing(null);
                   }
@@ -251,43 +163,11 @@ export default function Chores({ chores, accountName, onHome }) {
           onClose={() => setEditing(null)}
         />
       )}
-      {showPeople && (
-        <Sheet label="People" onClose={() => setShowPeople(false)}>
-          <PeopleForm
-            people={people}
-            accountName={accountName}
-            me={me}
-            onSave={(list, mine) => {
-              setPeople(list);
-              setMe(mine);
-              setShowPeople(false);
-            }}
-            onCancel={() => setShowPeople(false)}
-          />
-        </Sheet>
-      )}
     </div>
   );
 }
 
-function ChoresHeader({ onHome, children }) {
-  return (
-    <header className="lib-header chores-header">
-      <button className="home-btn" onClick={onHome} aria-label="Home">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        Home
-      </button>
-      <div className="brand">
-        <h1>Chores</h1>
-      </div>
-      {children}
-    </header>
-  );
-}
-
-function WeekStrip({ doc, selected, today, matches, onSelect }) {
+function WeekStrip({ doc, selected, today, onSelect }) {
   const days = weekOf(selected);
   return (
     <div className="week-strip">
@@ -295,7 +175,7 @@ function WeekStrip({ doc, selected, today, matches, onSelect }) {
         ‹
       </button>
       {days.map((d) => {
-        const list = choresFor(doc, d, today).filter((i) => !i.overdue && matches(i.who));
+        const list = choresFor(doc, d, today).filter((i) => !i.overdue);
         const open = list.filter((i) => !i.done).length;
         const cls = ['week-day', d === selected && 'selected', d === today && 'is-today', d < today && 'past'].filter(Boolean).join(' ');
         return (
@@ -319,13 +199,10 @@ function WeekStrip({ doc, selected, today, matches, onSelect }) {
   );
 }
 
-function ChoreRow({ item, people, today, onCheck, onEdit }) {
-  const { chore, done, overdue, who, day } = item;
-  const p = person(people, who);
-  const doneBy = done && person(people, done.by);
+function ChoreRow({ item, today, onCheck, onEdit }) {
+  const { chore, done, overdue, day } = item;
   let meta;
-  if (done) meta = doneBy ? `Done by ${doneBy.name}` : 'Done';
-  else if (overdue) {
+  if (overdue && !done) {
     const ago = daysBetween(day, today);
     meta = `Was due ${ago === 1 ? 'yesterday' : ago < 7 ? WEEKDAY_NAMES[toDate(day).getDay()] : toDate(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
   } else meta = describeSchedule(chore.schedule);
@@ -333,7 +210,6 @@ function ChoreRow({ item, people, today, onCheck, onEdit }) {
     <li className={`chore-row${done ? ' done' : ''}${overdue ? ' overdue' : ''}`}>
       <button
         className="chore-check"
-        style={{ '--who': p?.color ?? 'var(--accent)' }}
         onClick={() => onCheck(item)}
         aria-pressed={!!done}
         aria-label={`${done ? 'Undo' : 'Mark done'}: ${chore.name}`}
@@ -344,13 +220,9 @@ function ChoreRow({ item, people, today, onCheck, onEdit }) {
         <span className="chore-name">{chore.name}</span>
         <span className="chore-meta">
           {meta}
-          {chore.notes && !done ? ` · ${chore.notes}` : ''}
+          {chore.notes ? ` · ${chore.notes}` : ''}
         </span>
       </button>
-      <span className="chore-who" title={p ? p.name : 'Anyone'}>
-        {chore.assign === 'turns' && <TurnsIcon />}
-        <Avatar p={p} />
-      </span>
     </li>
   );
 }
@@ -376,34 +248,26 @@ function Sheet({ label, className = '', onClose, children }) {
   );
 }
 
-function AllChores({ doc, onEdit, onNew, onPeople, onClose }) {
+function AllChores({ doc, onEdit, onNew, onClose }) {
   const list = Object.values(doc.chores).sort((a, b) => a.name.localeCompare(b.name));
   return (
     <Sheet label="All chores" onClose={onClose}>
       <h2>All chores</h2>
       {list.length === 0 && <p className="muted">No chores yet.</p>}
       <ul className="all-chores">
-        {list.map((c) => {
-          const p = person(doc.people, c.assign);
-          return (
-            <li key={c.id}>
-              <button onClick={() => onEdit(c)}>
-                <span className="chore-name">{c.name}</span>
-                <span className="chore-meta">{describeSchedule(c.schedule)}</span>
-                <span className="chore-who">
-                  {c.assign === 'turns' && <TurnsIcon />}
-                  {p ? <Avatar p={p} size={22} /> : <span className="muted small">{whoLabel(c, doc.people)}</span>}
-                </span>
-              </button>
-            </li>
-          );
-        })}
+        {list.map((c) => (
+          <li key={c.id}>
+            <button onClick={() => onEdit(c)}>
+              <span className="chore-name">{c.name}</span>
+              <span className="chore-meta">
+                {describeSchedule(c.schedule)}
+                {c.notes ? ` · ${c.notes}` : ''}
+              </span>
+            </button>
+          </li>
+        ))}
       </ul>
-      <div className="row-gap">
-        <button className="btn ghost" onClick={onPeople}>
-          People
-        </button>
-        <span className="spacer" />
+      <div className="row-gap end">
         <button className="btn primary" onClick={onNew}>
           New chore
         </button>
@@ -412,13 +276,11 @@ function AllChores({ doc, onEdit, onNew, onPeople, onClose }) {
   );
 }
 
-function ChoreEditor({ chore, people, defaultDay, onSave, onDelete, onClose }) {
+function ChoreEditor({ chore, defaultDay, onSave, onDelete, onClose }) {
   const isNew = !chore.id;
   const s0 = chore.schedule ?? { type: 'weekly', every: 1, days: [toDate(defaultDay).getDay()], start: defaultDay };
   const [name, setName] = useState(chore.name ?? '');
   const [notes, setNotes] = useState(chore.notes ?? '');
-  const [assign, setAssign] = useState(chore.assign ?? 'turns');
-  const [turnStart, setTurnStart] = useState(chore.turnStart ?? people[0].id);
   const [type, setType] = useState(s0.type);
   const [every, setEvery] = useState(s0.every ?? 1);
   const [days, setDays] = useState(s0.days?.length ? s0.days : [toDate(s0.start).getDay()]);
@@ -431,14 +293,7 @@ function ChoreEditor({ chore, people, defaultDay, onSave, onDelete, onClose }) {
   const submit = (e) => {
     e.preventDefault();
     if (!name.trim() || !start) return;
-    onSave({
-      ...chore,
-      name: name.trim(),
-      notes: notes.trim(),
-      assign,
-      ...(assign === 'turns' ? { turnStart } : { turnStart: undefined }),
-      schedule,
-    });
+    onSave({ id: chore.id, createdAt: chore.createdAt, name: name.trim(), notes: notes.trim(), schedule });
   };
 
   return (
@@ -460,34 +315,6 @@ function ChoreEditor({ chore, people, defaultDay, onSave, onDelete, onClose }) {
                 {s}
               </button>
             ))}
-          </div>
-        )}
-
-        <span className="field-label">Who</span>
-        <div className="seg chore-seg">
-          {people.map((p) => (
-            <button type="button" key={p.id} className={assign === p.id ? 'active' : ''} onClick={() => setAssign(p.id)}>
-              <span className="dot" style={{ background: p.color }} />
-              {p.name}
-            </button>
-          ))}
-          <button type="button" className={assign === 'turns' ? 'active' : ''} onClick={() => setAssign('turns')}>
-            Take turns
-          </button>
-          <button type="button" className={assign === 'anyone' ? 'active' : ''} onClick={() => setAssign('anyone')}>
-            Anyone
-          </button>
-        </div>
-        {assign === 'turns' && (
-          <div className="inline-field">
-            <span className="muted">Goes first</span>
-            <div className="seg chore-seg small">
-              {people.map((p) => (
-                <button type="button" key={p.id} className={turnStart === p.id ? 'active' : ''} onClick={() => setTurnStart(p.id)}>
-                  {p.name}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
@@ -525,7 +352,14 @@ function ChoreEditor({ chore, people, defaultDay, onSave, onDelete, onClose }) {
         {type === 'weekly' && (
           <div className="day-picks" role="group" aria-label="Days of the week">
             {[1, 2, 3, 4, 5, 6, 0].map((d) => (
-              <button type="button" key={d} className={days.includes(d) ? 'active' : ''} onClick={() => toggleDay(d)} aria-pressed={days.includes(d)} aria-label={WEEKDAY_NAMES[d]}>
+              <button
+                type="button"
+                key={d}
+                className={days.includes(d) ? 'active' : ''}
+                onClick={() => toggleDay(d)}
+                aria-pressed={days.includes(d)}
+                aria-label={WEEKDAY_NAMES[d]}
+              >
                 {WEEKDAYS[d]}
               </button>
             ))}
@@ -538,7 +372,13 @@ function ChoreEditor({ chore, people, defaultDay, onSave, onDelete, onClose }) {
         <p className="schedule-preview">{describeSchedule(schedule)}</p>
 
         <span className="field-label">Notes</span>
-        <input className="text-input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional, e.g. bins go out the night before" maxLength={140} />
+        <input
+          className="text-input"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Optional, e.g. bins go out the night before"
+          maxLength={140}
+        />
 
         <div className="row-gap designer-actions">
           {onDelete && (
@@ -556,79 +396,5 @@ function ChoreEditor({ chore, people, defaultDay, onSave, onDelete, onClose }) {
         </div>
       </form>
     </Sheet>
-  );
-}
-
-function PeopleForm({ people, accountName, me, first, onSave, onCancel }) {
-  const firstName = (accountName ?? '').split(/\s+/)[0];
-  const [list, setList] = useState(() =>
-    [0, 1].map((i) => people[i] ?? { id: `p${i + 1}`, name: i === 0 ? firstName : '', color: PERSON_COLORS[i] }),
-  );
-  const [mine, setMine] = useState(me ?? (first ? 'p1' : null));
-  const edit = (i, patch) => setList((l) => l.map((p, j) => (j === i ? { ...p, ...patch } : p)));
-  const ok = list.every((p) => p.name.trim());
-
-  return (
-    <form
-      className="people-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (ok) onSave(list.map((p) => ({ ...p, name: p.name.trim() })), mine);
-      }}
-    >
-      {first ? (
-        <>
-          <h2>Who's doing chores?</h2>
-          <p className="muted">Two people share the list. You can change names and colors later.</p>
-        </>
-      ) : (
-        <h2>People</h2>
-      )}
-      {list.map((p, i) => (
-        <div key={p.id} className="person-edit">
-          <Avatar p={{ ...p, name: p.name || '?' }} size={40} />
-          <div className="person-fields">
-            <input
-              className="text-input"
-              value={p.name}
-              onChange={(e) => edit(i, { name: e.target.value })}
-              placeholder={i === 0 ? 'Your name' : 'Their name'}
-              maxLength={24}
-            />
-            <div className="person-colors">
-              {PERSON_COLORS.map((c) => (
-                <button
-                  type="button"
-                  key={c}
-                  className={`text-color${p.color === c ? ' active' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => edit(i, { color: c })}
-                  aria-label={`Color ${c}`}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      ))}
-      <span className="field-label">On this device, I'm</span>
-      <div className="seg chore-seg">
-        {list.map((p) => (
-          <button type="button" key={p.id} className={mine === p.id ? 'active' : ''} onClick={() => setMine(p.id)} disabled={!p.name.trim()}>
-            {p.name.trim() || '…'}
-          </button>
-        ))}
-      </div>
-      <p className="muted small">Chores you check off on this device are counted for you.</p>
-      <div className="row-gap end">
-        {onCancel && (
-          <button type="button" className="btn ghost" onClick={onCancel}>
-            Cancel
-          </button>
-        )}
-        <button type="submit" className="btn primary" disabled={!ok}>
-          {first ? 'Start' : 'Save'}
-        </button>
-      </div>
-    </form>
   );
 }

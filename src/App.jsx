@@ -55,7 +55,7 @@ function Sections({ account, folder }) {
   useBackClose(goHome, section !== null);
   useEffect(() => window.scrollTo(0, 0), [section]);
 
-  if (section === 'chores') return <Chores chores={chores} accountName={account?.name} onHome={goHome} />;
+  if (section === 'chores') return <Chores chores={chores} onHome={goHome} />;
   if (section === 'books') return <Bookshelf account={account} folder={folder} onHome={goHome} />;
   return <Home account={account} chores={chores} onOpen={setSection} />;
 }

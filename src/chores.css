@@ -204,35 +204,6 @@
   line-height: 1;
 }
 
-/* Filter */
-.who-filter {
-  margin-bottom: 18px;
-}
-.seg .dot,
-.chore-score .dot {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  margin-right: 6px;
-  vertical-align: 1px;
-}
-.chore-seg {
-  flex-wrap: wrap;
-  margin: 6px 0 14px;
-}
-.chore-seg button {
-  font-size: 15px;
-  padding: 9px 8px;
-}
-.chore-seg.small {
-  margin: 0;
-  flex: 1;
-}
-.chore-seg.small button {
-  padding: 6px 8px;
-}
-
 /* List */
 .chore-section + .chore-section {
   margin-top: 18px;
@@ -275,7 +246,7 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 2px solid var(--who);
+  border: 2px solid var(--accent);
   background: transparent;
   color: transparent;
   padding: 5px;
@@ -292,8 +263,8 @@
   height: 100%;
 }
 .chore-check[aria-pressed='true'] {
-  background: var(--who);
-  color: #1a120a;
+  background: var(--accent);
+  color: var(--accent-text);
 }
 .chore-body {
   flex: 1;
@@ -318,29 +289,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.chore-who {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--muted);
-}
-.turns-icon {
-  width: 16px;
-  height: 16px;
-}
-.avatar {
-  display: inline-grid;
-  place-items: center;
-  flex-shrink: 0;
-  border-radius: 50%;
-  color: #1a120a;
-  font: 700 13px var(--body-serif);
-}
-.avatar.anyone {
-  background: var(--surface-2);
-  color: var(--accent);
-  border: 1px solid var(--brass-line);
-}
 .chores-empty {
   text-align: center;
   padding: 30px 10px;
@@ -353,21 +301,6 @@
   color: var(--accent);
   font: italic 17px var(--body-serif);
 }
-.chore-score {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 16px;
-  margin: 26px 2px 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-  font-size: 15px;
-}
-.chore-score b {
-  color: var(--accent);
-  margin-left: 2px;
-}
-
 .fab {
   position: fixed;
   right: max(18px, env(safe-area-inset-right));
@@ -406,6 +339,14 @@
   font: 600 22px var(--serif);
   padding: 10px 12px;
   margin-bottom: 10px;
+}
+.chore-seg {
+  flex-wrap: wrap;
+  margin: 6px 0 14px;
+}
+.chore-seg button {
+  font-size: 15px;
+  padding: 9px 8px;
 }
 .suggestions {
   margin: 0 0 14px;
@@ -480,8 +421,7 @@
 }
 .all-chores button {
   display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-areas: 'name who' 'meta who';
+  grid-template-areas: 'name' 'meta';
   gap: 2px 10px;
   width: 100%;
   padding: 10px 2px;
@@ -496,46 +436,6 @@
 }
 .all-chores .chore-meta {
   grid-area: meta;
-}
-.all-chores .chore-who {
-  grid-area: who;
-}
-
-/* People */
-.people-form {
-  max-width: 480px;
-  margin: 0 auto;
-}
-.people-form h2 {
-  font: 600 30px var(--serif);
-  margin: 0 0 6px;
-}
-.person-edit {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  margin: 16px 0;
-}
-.person-edit .avatar {
-  font-size: 18px;
-}
-.person-fields {
-  flex: 1;
-  display: grid;
-  gap: 8px;
-}
-.person-fields .text-input {
-  width: 100%;
-  font-size: 17px;
-}
-.person-colors {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.person-colors .text-color {
-  width: 26px;
-  height: 26px;
 }
 
 @media (max-width: 420px) {

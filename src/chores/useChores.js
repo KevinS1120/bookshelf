@@ -1,14 +1,12 @@
-// Chores, kept in Bookshelf/_home/chores.json so every device (and both people) see the same list.
+// Chores, kept in Bookshelf/_home/chores.json so every device sees the same list.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { jsonStore } from '../store';
 import { uid } from '../util';
 import { daysBetween, doneKey, today } from './schedule';
 
-// doc: { version, people: [{ id, name, color }], chores: { [id]: chore }, done: { 'choreId|day': { by, at } } }
-const emptyDoc = () => ({ version: 1, people: [], chores: {}, done: {} });
+// doc: { version, chores: { [id]: chore }, done: { 'choreId|day': { at } } }
+const emptyDoc = () => ({ version: 1, chores: {}, done: {} });
 const store = jsonStore('_home/chores.json', emptyDoc);
-
-export const PERSON_COLORS = ['#c8a15a', '#7fa99b', '#b9727a', '#8e9ccc', '#c98a5a', '#a58fc0'];
 
 export function useChores() {
   const [doc, setDoc] = useState(null);
@@ -61,11 +59,13 @@ export function useChores() {
   }, []);
 
   const toggle = useCallback(
-    (choreId, onDay, by) =>
+    (choreId, onDay) =>
       change((d) => {
         const k = doneKey(choreId, onDay);
         if (d.done[k]) delete d.done[k];
-        else d.done[k] = { by, at: Date.now() };
+        else d.done[k] = { at: Date.now() };
+        // Check-offs older than a year aren't needed any more.
+        for (const old of Object.keys(d.done)) if (daysBetween(old.split('|')[1], onDay) > 400) delete d.done[old];
       }),
     [change],
   );
@@ -90,15 +90,5 @@ export function useChores() {
     [change],
   );
 
-  const setPeople = useCallback(
-    (people) =>
-      change((d) => {
-        d.people = people;
-        // Old check-offs (over a year) aren't needed any more.
-        for (const k of Object.keys(d.done)) if (daysBetween(k.split('|')[1], today()) > 400) delete d.done[k];
-      }),
-    [change],
-  );
-
-  return { doc, error, today: day, refresh, toggle, saveChore, deleteChore, setPeople };
+  return { doc, error, today: day, refresh, toggle, saveChore, deleteChore };
 }
