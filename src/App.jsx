@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initAuth, isConfigured, signOut } from './auth';
-import { newerVersionAvailable } from './native';
+import { newerVersionAvailable, useBackClose } from './native';
 import { statusPatch } from './util';
 import * as library from './library';
 import Library from './components/Library';
@@ -13,6 +13,9 @@ import Reader from './components/Reader';
 import CoverDialog from './components/CoverDialog';
 import SettingsDialog from './components/SettingsDialog';
 import Welcome from './components/Welcome';
+import Home from './components/Home';
+import Chores from './components/Chores';
+import { useChores } from './chores/useChores';
 
 export default function App() {
   const [state, setState] = useState(isConfigured ? { status: 'loading' } : { status: 'signed-out' });
@@ -41,10 +44,23 @@ export default function App() {
   if (state.status === 'signed-out') return <Welcome error={state.error} />;
   if (state.status === 'connecting') return <Welcome busy="Opening your Bookshelf folder in OneDrive…" />;
   if (state.status === 'error') return <Welcome error={state.error} canSignOut />;
-  return <Bookshelf account={state.account} folder={state.folder} />;
+  return <Sections account={state.account} folder={state.folder} />;
 }
 
-function Bookshelf({ account, folder }) {
+// The app opens on a menu: Chores, Financial Planning, Bookshelf.
+function Sections({ account, folder }) {
+  const [section, setSection] = useState(null);
+  const chores = useChores();
+  const goHome = useCallback(() => setSection(null), []);
+  useBackClose(goHome, section !== null);
+  useEffect(() => window.scrollTo(0, 0), [section]);
+
+  if (section === 'chores') return <Chores chores={chores} accountName={account?.name} onHome={goHome} />;
+  if (section === 'books') return <Bookshelf account={account} folder={folder} onHome={goHome} />;
+  return <Home account={account} chores={chores} onOpen={setSection} />;
+}
+
+function Bookshelf({ account, folder, onHome }) {
   const [books, setBooks] = useState(null);
   const [extras, setExtras] = useState({ settings: {}, activity: {} });
   const [loadError, setLoadError] = useState('');
@@ -221,6 +237,7 @@ function Bookshelf({ account, folder }) {
         onAdd={addBook}
         onRefresh={refresh}
         onSettings={() => setShowSettings(true)}
+        onHome={onHome}
         onSetGoal={setGoal}
         error={loadError || saveError}
       />

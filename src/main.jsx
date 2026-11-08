@@ -6,6 +6,7 @@ import './reader.css';
 import './features.css';
 import './native.css';
 import './theme.css';
+import './chores.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

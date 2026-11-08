@@ -34,6 +34,18 @@ Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.y
 
 ## Features
 
+The app opens on a menu: **Chores**, **Financial Planning** (coming soon) and **Bookshelf**.
+
+### Chores
+- Today's date and today's chores, with a week strip to look ahead or back (or swipe sideways)
+- Schedules: once, every N days, chosen weekdays every N weeks, or monthly
+- Assign to either person, to anyone, or take turns (alternates each time it comes up)
+- Tap the circle to check a chore off; missed chores stay at the top until done or due again
+- Filter by person, and a count of what each person did this week
+- Saved in `Bookshelf/_home/chores.json`, so every device sees the same list
+
+### Bookshelf
+
 - Library with covers, search, filters, and sorting, in a dark academia theme (walnut, parchment, brass)
 - **⋯ menu on every book**: read, change status (To read / Reading / On hold / Finished / Did not
   finish), start over, change cover, remove

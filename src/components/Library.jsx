@@ -19,7 +19,7 @@ const SORTS = {
   progress: { label: 'Progress', fn: (a, b) => b.progress - a.progress },
 };
 
-export default function Library({ books, series = [], extras, allTags, actions, onAdd, onRefresh, onSettings, onSetGoal, onOpenSeries, error }) {
+export default function Library({ books, series = [], extras, allTags, actions, onAdd, onRefresh, onSettings, onSetGoal, onOpenSeries, onHome, error }) {
   const [filter, setFilter] = usePref('lib-filter', 'all');
   const [tag, setTag] = usePref('lib-tag', null);
   const [sort, setSort] = usePref('lib-sort', 'recent');
@@ -164,6 +164,14 @@ export default function Library({ books, series = [], extras, allTags, actions, 
         </div>
       )}
       <header className="lib-header">
+        {onHome && (
+          <button className="home-btn" onClick={onHome} aria-label="Home">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Home
+          </button>
+        )}
         <div className="brand">
           <span className="brand-mark">📚</span>
           <h1>Bookshelf</h1>

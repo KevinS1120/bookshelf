@@ -18,7 +18,7 @@ export default function Welcome({ error, busy, canSignOut }) {
         ) : (
           <>
             <p className="muted">
-              Read and track your PDF, EPUB and Kindle (AZW3, MOBI) books on any device. Your library is kept in a Bookshelf folder in your
+              Chores and your books (PDF, EPUB, Kindle), on any device. Everything is kept in a Bookshelf folder in your
               OneDrive.
             </p>
             {!canSignOut && (

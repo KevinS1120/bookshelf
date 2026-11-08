@@ -26,6 +26,8 @@ export async function connect() {
 }
 
 const itemPath = (rel) => `/me/drive/items/${folder.id}:/${rel.split('/').map(encodeURIComponent).join('/')}:`;
+// For other files kept in the Bookshelf folder (chores, ...).
+export const folderItemPath = (rel) => itemPath(rel);
 const isBookFile = (item) => item.file && /\.(pdf|epub)$/i.test(item.name);
 
 // ---------- reading data (_bookshelf/library.json) ----------
